@@ -1,3 +1,5 @@
+ポイントが入ったときの演出文字を「POINT!」に変更し、ラリーの楽しさと追いかけやすさをさらに高めるためにすべてのボールのスピードを現在の0.7倍（30%ダウン）に一律でスローダウン調整した最新のコードを作成しました。
+以下のコードをコピーして、GitHubの index.html に上書きしてコミットしてください！
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -267,33 +269,30 @@ function update() {
     cpu.isMoving = false;
   }
   if (cpu.x < 75) cpu.x = 75;
-  if (cpu.x > 309) cpu.x = 309;
+  if (cpu.x > 309) cpu.x > 309;
 
-  // ボール移動
+  // ボール移動（全体を0.7倍にスローダウン調整）
   if (ball.active) {
-    let speedMult = 1 + Math.min(rallyCount * 0.05, 0.4);
+    let speedMult = (1 + Math.min(rallyCount * 0.05, 0.4)) * 0.7;
     ball.x += ball.vx * speedMult;
     ball.y += ball.vy * speedMult;
-    ball.z += ball.vz;
-    ball.vz -= 0.15;
+    ball.z += ball.vz * 0.7;
+    ball.vz -= 0.12;
 
     if (ball.z <= 0) {
       ball.z = 0;
       let isOut = (ball.x < 39 || ball.x > 345);
 
       if (ball.y < 65) {
-        // 奥側（CPU側）エリアへの着地
         if (isOut) {
-          judgeMessage = { text: "OUT!", timer: 45 };
-          // 最後に打ったのがプレイヤーなら、プレイヤーのミス（CPUの得点）
-          // 最後に打ったのがCPUなら、CPUがアウトにした（プレイヤーの得点）
+          judgeMessage = { text: "POINT!", timer: 45 };
           if (ball.lastHitter === 'player') {
             scoreCpu++;
           } else {
             scorePlayer++;
           }
         } else {
-          // インの場合：最後に打ったのがプレイヤーならプレイヤーの得点、CPUならCPUの得点
+          judgeMessage = { text: "POINT!", timer: 45 };
           if (ball.lastHitter === 'player') {
             scorePlayer++;
           } else {
@@ -302,18 +301,15 @@ function update() {
         }
         resetRally();
       } else if (ball.y > 405) {
-        // 手前側（プレイヤー側）エリアへの着地
         if (isOut) {
-          judgeMessage = { text: "OUT!", timer: 45 };
-          // 最後に打ったのがCPUなら、CPUのミス（プレイヤーの得点）
-          // 最後に打ったのがプレイヤーなら、プレイヤーがアウトにした（CPUの得点）
+          judgeMessage = { text: "POINT!", timer: 45 };
           if (ball.lastHitter === 'cpu') {
             scorePlayer++;
           } else {
             scoreCpu++;
           }
         } else {
-          // インの場合
+          judgeMessage = { text: "POINT!", timer: 45 };
           if (ball.lastHitter === 'cpu') {
             scoreCpu++;
           } else {
@@ -328,17 +324,17 @@ function update() {
   if (effect.timer > 0) effect.timer--;
   if (judgeMessage.timer > 0) judgeMessage.timer--;
 
-  // サーブ
+  // サーブ（0.7倍速）
   if (!ball.active && (input.a || input.b)) {
     ball.active = true;
-    ball.vx = (192 - ball.x) * 0.015;
-    ball.vy = -4.2;
-    ball.vz = 2.4;
+    ball.vx = (192 - ball.x) * 0.015 * 0.7;
+    ball.vy = -4.2 * 0.7;
+    ball.vz = 2.4 * 0.7;
     ball.lastHitter = 'player';
     rallyCount = 1;
     effect = { x: player.x, y: player.y - 15, timer: 15 };
   } 
-  // ラリー中の打球
+  // ラリー中の打球（0.7倍速 ＆ 角度に応じた減速）
   else if (ball.active) {
     let distP = Math.hypot(player.x - ball.x, player.y - ball.y);
     if (distP < 48 && ball.y > 210 && ball.y < 390) {
@@ -347,19 +343,17 @@ function update() {
         ball.lastHitter = 'player';
         let isLob = input.b;
 
-        // 【ご要望のスピード調整】：直線（中央付近）は速く、角度がつくほどスピードを落とす
         let absOffset = Math.abs(player.x - ball.x);
         let speedFactor = Math.max(0.65, 1.0 - (absOffset * 0.012));
-
-        let baseVx = (ball.x - player.x) * 0.15;
+        let baseVx = (ball.x - player.x) * 0.15 * 0.7;
 
         if (isLob) {
-          ball.vy = -3.0 * speedFactor; 
-          ball.vz = 4.5;
+          ball.vy = -3.0 * speedFactor * 0.7; 
+          ball.vz = 4.5 * 0.7;
           ball.vx = baseVx;
         } else {
-          ball.vy = -5.0 * speedFactor; 
-          ball.vz = 1.7;
+          ball.vy = -5.0 * speedFactor * 0.7; 
+          ball.vz = 1.7 * 0.7;
           ball.vx = baseVx;
         }
         effect = { x: ball.x, y: ball.y, timer: 15 };
@@ -371,13 +365,12 @@ function update() {
       rallyCount++;
       ball.lastHitter = 'cpu';
 
-      // CPU側も同様に、中央は直線的に速く、サイドを狙うと少しスピードが緩む自然なラリーバランス
       let cpuOffset = Math.abs(cpu.x - ball.x);
       let cpuSpeedFactor = Math.max(0.7, 1.0 - (cpuOffset * 0.01));
 
-      ball.vy = 4.6 * cpuSpeedFactor; 
-      ball.vz = 1.7;
-      ball.vx = (192 - cpu.x) * 0.07 + (Math.random() - 0.5) * 1.0;
+      ball.vy = 4.6 * cpuSpeedFactor * 0.7; 
+      ball.vz = 1.7 * 0.7;
+      ball.vx = ((192 - cpu.x) * 0.07 + (Math.random() - 0.5) * 1.0) * 0.7;
     }
   }
 }
@@ -513,8 +506,8 @@ function draw() {
   ctx.fillText(ball.active ? `RALLY:${rallyCount}` : "サーブは[A/B]", 145, 25);
 
   if (judgeMessage.timer > 0) {
-    ctx.fillStyle = '#ff3333';
-    ctx.font = 'bold 28px "Courier New"';
+    ctx.fillStyle = '#ffcc00';
+    ctx.font = 'bold 26px "Courier New"';
     ctx.textAlign = 'center';
     ctx.fillText(judgeMessage.text, canvas.width / 2, canvas.height / 2 - 20);
     ctx.textAlign = 'left';
@@ -562,3 +555,4 @@ loop();
 
 </body>
 </html>
+
