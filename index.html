@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -140,8 +141,8 @@ const player = { x: 192, y: 350, speed: 3.5, animFrame: 0, isMoving: false };
 const cpu = { x: 192, y: 110, speed: 2.2, animFrame: 0, isMoving: false };
 const ball = { x: 192, y: 330, z: 0, vx: 0, vy: 0, vz: 0, active: false };
 
-let rallyCount = 0; // ラリー継続回数
-let judgeMessage = { text: "", timer: 0 }; // ミス判定表示用
+let rallyCount = 0;
+let judgeMessage = { text: "", timer: 0 };
 let effect = { x: 0, y: 0, timer: 0 };
 
 const input = { moveX: 0, moveY: 0, a: false, b: false };
@@ -229,7 +230,7 @@ function resetRally() {
   ball.z = 0;
   ball.vx = 0; ball.vy = 0; ball.vz = 0;
   ball.active = false;
-  rallyCount = 0; // ラリールセット
+  rallyCount = 0;
 }
 resetRally();
 
@@ -270,7 +271,6 @@ function update() {
 
   // ボール移動
   if (ball.active) {
-    // ラリーが続くほど速度がアップ（最大1.8倍まで加速）
     let speedMult = 1 + Math.min(rallyCount * 0.08, 0.8);
     ball.x += ball.vx * speedMult;
     ball.y += ball.vy * speedMult;
@@ -279,20 +279,27 @@ function update() {
 
     if (ball.z <= 0) {
       ball.z = 0;
-      // 着地判定（アウト・ネット・イン）
+      // 正確な着地判定と得点加算の修正
+      // コート外枠: 横幅は左39〜右345、縦は奥65〜手前405
+      let isOut = (ball.x < 39 || ball.x > 345);
+
       if (ball.y < 65) {
-        // 奥側エリアでの着地
-        if (ball.x < 39 || ball.x > 345) {
+        // 奥側（CPU側）エリアへの着地
+        if (isOut) {
           judgeMessage = { text: "OUT!", timer: 45 };
+          scorePlayer++; // 相手がアウトにしたのでプレイヤーの得点！
+        } else {
+          scoreCpu++; // プレイヤーが返せなかった、またはCPUのイン
         }
-        scorePlayer++;
         resetRally();
       } else if (ball.y > 405) {
-        // 手前側エリアでの着地
-        if (ball.x < 39 || ball.x > 345) {
+        // 手前側（プレイヤー側）エリアへの着地
+        if (isOut) {
           judgeMessage = { text: "OUT!", timer: 45 };
+          scoreCpu++; // こちらがアウトにしたのでCPUの得点
+        } else {
+          scorePlayer++; // CPUが返せなかった、またはプレイヤーのイン
         }
-        scoreCpu++;
         resetRally();
       }
     }
@@ -310,15 +317,13 @@ function update() {
     rallyCount = 1;
     effect = { x: player.x, y: player.y - 15, timer: 15 };
   } 
-  // ラリー中の打球判定（A・Bボタン共通、ワイドな球は少し速度を落として追いつきやすく調整）
+  // ラリー中の打球
   else if (ball.active) {
     let distP = Math.hypot(player.x - ball.x, player.y - ball.y);
     if (distP < 45 && ball.y > 210 && ball.y < 390) {
       if (input.a || input.b) {
         rallyCount++;
         let isLob = input.b;
-        
-        // 角度（サイドへの切れ方）が急なほど、少しだけスピードを穏やかにして追いつきやすくする補正
         let angleFactor = 1 - Math.abs(player.x - ball.x) * 0.003;
         angleFactor = Math.max(angleFactor, 0.8);
 
@@ -337,9 +342,11 @@ function update() {
 
     let distC = Math.hypot(cpu.x - ball.x, cpu.y - ball.y);
     if (distC < 45 && ball.y < 220 && ball.y > 60) {
-      ball.vy = 5.2; 
+      rallyCount++;
+      // CPUの返球が必ずコート内に収まるようにコントロールを大幅強化（ラリーが続くように調整）
+      ball.vy = 4.5; 
       ball.vz = 1.6;
-      ball.vx = (ball.x - cpu.x) * 0.15;
+      ball.vx = (192 - cpu.x) * 0.08 + (Math.random() - 0.5) * 1.5;
     }
   }
 }
@@ -452,7 +459,7 @@ function draw() {
   let sTopRightX = brX + (trX - brX) * 0.35;
   let sBotY = 65 + (405 - 65) * 0.65;
   let sBotLeftX = blX + (tlX - blX) * 0.65;
-  let sBotRightX = brX + (trX - brX) * 0.65;
+  let sBotRightX = brX + (trX - blX) * 0.65;
 
   ctx.beginPath();
   ctx.moveTo(sTopLeftX, sTopY); ctx.lineTo(sTopRightX, sTopY);
