@@ -211,12 +211,10 @@ function setupActionButton(id, keyName) {
 setupActionButton('btn-a', 'a');
 setupActionButton('btn-b', 'b');
 
-// サーブ位置のリセット（奇数・偶数ポイントに応じたデュース／アドバンテージサイドの切り替え）
 function resetRally() {
   let totalPoints = scorePlayer + scoreCpu;
-  let isEven = (totalPoints % 2 === 0); // 偶数ポイントなら左側（アド）、奇数なら右側（デュース）
+  let isEven = (totalPoints % 2 === 0);
 
-  // プレイヤーが手前ベースライン側
   player.x = isEven ? 140 : 244;
   player.y = 370;
 
@@ -286,25 +284,29 @@ function update() {
 
   if (effect.timer > 0) effect.timer--;
 
-  // サーブおよび打球判定（AとBの判定基準を統一しつつ挙動を変更）
-  if (!ball.active && input.a) {
+  // サーブ
+  if (!ball.active && (input.a || input.b)) {
     ball.active = true;
     ball.vx = (192 - ball.x) * 0.015;
     ball.vy = -4.5;
     ball.vz = 2.2;
     effect = { x: player.x, y: player.y - 15, timer: 15 };
-  } else if (ball.active) {
+  } 
+  // ラリー中の打球判定（Aボタン・Bボタン共通の完全同一判定）
+  else if (ball.active) {
     let distP = Math.hypot(player.x - ball.x, player.y - ball.y);
-    // どちらのボタンでも同じ打点範囲（distP < 45）で確実にヒットできるように修正
+    // プレイヤーがボールのヒット範囲（45px以内）にいて、手前コートにボールがあるとき
     if (distP < 45 && ball.y > 210 && ball.y < 390) {
       if (input.a) {
-        // Aボタン：通常の速いショット
-        ball.vy = -5.2; ball.vz = 1.6;
+        // Aボタン：通常のショット
+        ball.vy = -5.2; 
+        ball.vz = 1.6;
         ball.vx = (ball.x - player.x) * 0.15;
         effect = { x: ball.x, y: ball.y, timer: 15 };
       } else if (input.b) {
-        // Bボタン：ふんわり高いロブ
-        ball.vy = -3.2; ball.vz = 4.8;
+        // Bボタン：ロブ（判定条件をAボタンと完全に同期）
+        ball.vy = -3.2; 
+        ball.vz = 4.8;
         ball.vx = (ball.x - player.x) * 0.1;
         effect = { x: ball.x, y: ball.y, timer: 15 };
       }
@@ -312,7 +314,8 @@ function update() {
 
     let distC = Math.hypot(cpu.x - ball.x, cpu.y - ball.y);
     if (distC < 45 && ball.y < 220 && ball.y > 60) {
-      ball.vy = 5.2; ball.vz = 1.6;
+      ball.vy = 5.2; 
+      ball.vz = 1.6;
       ball.vx = (ball.x - cpu.x) * 0.15;
     }
   }
@@ -448,9 +451,9 @@ function draw() {
   ctx.font = 'bold 14px "Courier New"';
   ctx.fillText(`YOU: ${scorePlayer}`, 45, 25);
   ctx.fillText(`CPU: ${scoreCpu}`, 280, 25);
-  ctx.fillText(ball.active ? "ラリー中!" : "サーブは[A]!", 140, 25);
+  ctx.fillText(ball.active ? "ラリー中!" : "サーブは[A/B]!", 130, 25);
 
-  // 打球可能範囲のヒットエリア円（AでもBでも共通）
+  // ヒットエリアの可視化
   if (ball.active && ball.y > 210 && ball.y < 390) {
     let distP = Math.hypot(player.x - ball.x, player.y - ball.y);
     ctx.strokeStyle = distP < 45 ? 'rgba(0, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.2)';
