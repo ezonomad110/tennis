@@ -136,8 +136,9 @@ const ctx = canvas.getContext('2d');
 let scorePlayer = 0;
 let scoreCpu = 0;
 
-const player = { x: 192, y: 350, speed: 3.5 };
-const cpu = { x: 192, y: 110, speed: 2.2 };
+// キャラクター（歩行アニメーション用フレーム管理を追加）
+const player = { x: 192, y: 350, speed: 3.5, animFrame: 0, isMoving: false };
+const cpu = { x: 192, y: 110, speed: 2.2, animFrame: 0, isMoving: false };
 const ball = { x: 192, y: 330, z: 0, vx: 0, vy: 0, vz: 0, active: false };
 
 let effect = { x: 0, y: 0, timer: 0 };
@@ -230,8 +231,15 @@ function update() {
   let mx = input.moveX !== 0 ? input.moveX : kx;
   let my = input.moveY !== 0 ? input.moveY : ky;
 
-  player.x += mx * player.speed;
-  player.y += my * player.speed;
+  if (mx !== 0 || my !== 0) {
+    player.x += mx * player.speed;
+    player.y += my * player.speed;
+    player.isMoving = true;
+    player.animFrame += 0.2; // 歩行アニメーション進行
+  } else {
+    player.isMoving = false;
+    player.animFrame = 0;
+  }
 
   if (player.x < 55) player.x = 55;
   if (player.x > 329) player.x = 329;
@@ -239,8 +247,11 @@ function update() {
   if (player.y > 395) player.y = 395;
 
   if (ball.active) {
-    if (cpu.x < ball.x - 4) cpu.x += cpu.speed;
-    else if (cpu.x > ball.x + 4) cpu.x -= cpu.speed;
+    if (cpu.x < ball.x - 4) { cpu.x += cpu.speed; cpu.isMoving = true; cpu.animFrame += 0.2; }
+    else if (cpu.x > ball.x + 4) { cpu.x -= cpu.speed; cpu.isMoving = true; cpu.animFrame += 0.2; }
+    else { cpu.isMoving = false; }
+  } else {
+    cpu.isMoving = false;
   }
   if (cpu.x < 75) cpu.x = 75;
   if (cpu.x > 309) cpu.x = 309;
@@ -273,7 +284,7 @@ function update() {
     effect = { x: player.x, y: player.y - 15, timer: 15 };
   } else if (ball.active) {
     let distP = Math.hypot(player.x - ball.x, player.y - ball.y);
-    if (distP < 35 && ball.y > 210 && ball.y < 390) {
+    if (distP < 45 && ball.y > 210 && ball.y < 390) {
       if (input.a) {
         ball.vy = -5.2; ball.vz = 1.6;
         ball.vx = (ball.x - player.x) * 0.15;
@@ -286,91 +297,91 @@ function update() {
     }
 
     let distC = Math.hypot(cpu.x - ball.x, cpu.y - ball.y);
-    if (distC < 35 && ball.y < 220 && ball.y > 60) {
+    if (distC < 45 && ball.y < 220 && ball.y > 60) {
       ball.vy = 5.2; ball.vz = 1.6;
       ball.vx = (ball.x - cpu.x) * 0.15;
     }
   }
 }
 
-// --- ファミリーテニス風の本格ドット絵キャラクター描画関数 ---
-function drawDotCharacter(x, y, isPlayer) {
+// --- 動くアニメーション ＆ ボール位置によるラケット左右切り替えドットキャラ描画 ---
+function drawDotCharacter(x, y, isPlayer, targetBallX) {
   ctx.save();
   ctx.translate(x, y);
   
-  const ps = 2; // 1ドットの大きさ
+  const ps = 2;
+  // 足の動き（アニメーション：歩行時に左右交互に上下する）
+  let legOffset = 0;
+  if (isPlayer && player.isMoving) {
+    legOffset = Math.floor(player.animFrame) % 2 === 0 ? 1 : -1;
+  } else if (!isPlayer && cpu.isMoving) {
+    legOffset = Math.floor(cpu.animFrame) % 2 === 0 ? 1 : -1;
+  }
+
+  // ボールの位置に応じてラケットを左右に切り替える（ボールがキャラの左なら左手、右なら右手）
+  let isRacketLeft = targetBallX < x;
 
   if (isPlayer) {
-    // === 手前プレイヤー（後ろ姿・ピンクのウェア・サンバイザー・ラケット右手持ち） ===
-    // バイザー・髪（黒＆白）
+    // === 手前プレイヤー（後ろ姿） ===
     ctx.fillStyle = '#111';
     ctx.fillRect(-6 * ps, -12 * ps, 12 * ps, 4 * ps);
     ctx.fillStyle = '#fff';
     ctx.fillRect(-6 * ps, -12 * ps, 12 * ps, ps);
 
-    // 頭部・首（肌）
     ctx.fillStyle = '#f5d0b1';
     ctx.fillRect(-4 * ps, -8 * ps, 8 * ps, 3 * ps);
 
-    // 上半身（ピンクのテニスウェア）
     ctx.fillStyle = '#ff69b4';
     ctx.fillRect(-6 * ps, -5 * ps, 12 * ps, 7 * ps);
-    // ウェアの白ライン
     ctx.fillStyle = '#fff';
     ctx.fillRect(-2 * ps, -5 * ps, 4 * ps, 7 * ps);
 
-    // 脚・靴
+    // 脚（アニメーション対応）
     ctx.fillStyle = '#f5d0b1';
-    ctx.fillRect(-4 * ps, 2 * ps, 3 * ps, 4 * ps);
-    ctx.fillRect(1 * ps, 2 * ps, 3 * ps, 4 * ps);
-    ctx.fillStyle = '#fff'; // シューズ
-    ctx.fillRect(-5 * ps, 5 * ps, 4 * ps, 2 * ps);
-    ctx.fillRect(1 * ps, 5 * ps, 4 * ps, 2 * ps);
+    ctx.fillRect(-4 * ps, 2 * ps + legOffset, 3 * ps, 4 * ps);
+    ctx.fillRect(1 * ps, 2 * ps - legOffset, 3 * ps, 4 * ps);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-5 * ps, 5 * ps + legOffset, 4 * ps, 2 * ps);
+    ctx.fillRect(1 * ps, 5 * ps - legOffset, 4 * ps, 2 * ps);
 
-    // ラケット（右手に斜め上へ構える）
+    // ラケットの左右切り替え
     ctx.fillStyle = '#fff';
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 1;
+    let racketX = isRacketLeft ? -10 * ps : 10 * ps;
     ctx.beginPath();
-    ctx.ellipse(8 * ps, -4 * ps, 4 * ps, 6 * ps, Math.PI / 4, 0, Math.PI * 2);
+    ctx.ellipse(racketX, -4 * ps, 4 * ps, 6 * ps, isRacketLeft ? -Math.PI / 4 : Math.PI / 4, 0, Math.PI * 2);
     ctx.fill(); ctx.stroke();
-    // グリップ
-    ctx.fillStyle = '#8b4513';
-    ctx.fillRect(4 * ps, 1 * ps, ps, 4 * ps);
 
   } else {
-    // === 奥側CPU（正面向き・ミントグリーンのウェア） ===
-    // 帽子・髪
+    // === 奥側CPU（正面向き） ===
     ctx.fillStyle = '#111';
     ctx.fillRect(-6 * ps, -12 * ps, 12 * ps, 4 * ps);
     ctx.fillStyle = '#00fa9a';
     ctx.fillRect(-6 * ps, -12 * ps, 12 * ps, ps);
 
-    // 顔・肌
     ctx.fillStyle = '#f5d0b1';
     ctx.fillRect(-4 * ps, -8 * ps, 8 * ps, 4 * ps);
-    ctx.fillStyle = '#000'; // 目
+    ctx.fillStyle = '#000';
     ctx.fillRect(-2 * ps, -7 * ps, ps, ps);
     ctx.fillRect(1 * ps, -7 * ps, ps, ps);
 
-    // 上半身（ミントグリーン）
     ctx.fillStyle = '#00fa9a';
     ctx.fillRect(-6 * ps, -4 * ps, 12 * ps, 6 * ps);
 
-    // 脚
     ctx.fillStyle = '#f5d0b1';
-    ctx.fillRect(-4 * ps, 2 * ps, 3 * ps, 4 * ps);
-    ctx.fillRect(1 * ps, 2 * ps, 3 * ps, 4 * ps);
+    ctx.fillRect(-4 * ps, 2 * ps + legOffset, 3 * ps, 4 * ps);
+    ctx.fillRect(1 * ps, 2 * ps - legOffset, 3 * ps, 4 * ps);
     ctx.fillStyle = '#fff';
-    ctx.fillRect(-5 * ps, 5 * ps, 4 * ps, 2 * ps);
-    ctx.fillRect(1 * ps, 5 * ps, 4 * ps, 2 * ps);
+    ctx.fillRect(-5 * ps, 5 * ps + legOffset, 4 * ps, 2 * ps);
+    ctx.fillRect(1 * ps, 5 * ps - legOffset, 4 * ps, 2 * ps);
 
-    // ラケット（左手側）
+    let racketX = isRacketLeft ? -10 * ps : 10 * ps;
     ctx.fillStyle = '#fff';
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.ellipse(-8 * ps, -4 * ps, 4 * ps, 6 * ps, -Math.PI / 4, 0, Math.PI * 2);
+    ctx.ellipse(racketX, -4 * ps, 4 * ps, 6 * ps, isRacketLeft ? Math.PI / 4 : -Math.PI / 4, 0, Math.PI * 2);
     ctx.fill(); ctx.stroke();
   }
 
@@ -381,7 +392,7 @@ function draw() {
   ctx.fillStyle = '#008080';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // --- 立体感のあるパースペクティブ（台形）コートの描画 ---
+  // 立体コート描画
   const tlX = 75, tlY = 65;
   const trX = 309, trY = 65;
   const brX = 345, brY = 405;
@@ -425,18 +436,29 @@ function draw() {
   ctx.lineWidth = 1;
   ctx.strokeRect(netLeftX - 10, netY - 8, (netRightX - netLeftX) + 20, 16);
 
-  // --- スコア表示 ---
+  // スコア表示
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 14px "Courier New"';
   ctx.fillText(`YOU: ${scorePlayer}`, 45, 25);
   ctx.fillText(`CPU: ${scoreCpu}`, 280, 25);
   ctx.fillText(ball.active ? "ラリー中!" : "サーブは[A]!", 140, 25);
 
-  // --- 本格的なドット絵キャラクターの描画 ---
-  drawDotCharacter(player.x, player.y, true);
-  drawDotCharacter(cpu.x, cpu.y, false);
+  // --- 当たり判定（ヒットエリア）の可視化 ---
+  // プレイヤーの周囲にうっすらと打球可能範囲（円）を表示してわかりやすくする
+  let distP = Math.hypot(player.x - ball.x, player.y - ball.y);
+  if (ball.active && ball.y > 210 && ball.y < 390) {
+    ctx.strokeStyle = distP < 45 ? 'rgba(0, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y - 10, 45, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 
-  // --- ボールと影 ---
+  // キャラクター描画（ボールの位置を渡してラケットの向きを自動切り替え＆歩行アニメ）
+  drawDotCharacter(player.x, player.y, true, ball.x);
+  drawDotCharacter(cpu.x, cpu.y, false, ball.x);
+
+  // ボールと影
   let shadowY = ball.y + ball.z;
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.beginPath(); ctx.arc(ball.x, shadowY, 4, 0, Math.PI*2); ctx.fill();
@@ -445,7 +467,7 @@ function draw() {
   ctx.fillStyle = '#ffffe0';
   ctx.beginPath(); ctx.arc(ball.x, ballScreenY, 5, 0, Math.PI*2); ctx.fill();
 
-  // --- 打球エフェクト（ファミコン風の十字スパーク） ---
+  // 打球エフェクト
   if (effect.timer > 0) {
     ctx.strokeStyle = '#ffcc00';
     ctx.lineWidth = 3;
