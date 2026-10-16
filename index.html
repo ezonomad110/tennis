@@ -5,184 +5,383 @@
   <title>Retro Tennis Game</title>
   <style>
     body {
-      background-color: #222;
+      background-color: #111;
       color: #fff;
-      font-family: monospace;
+      font-family: 'Courier New', Courier, monospace;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
+      min-height: 100vh;
       margin: 0;
+      user-select: none;
+    }
+    h2 {
+      margin: 5px 0;
+      font-size: 18px;
+      letter-spacing: 2px;
+    }
+    #game-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: #008080;
+      border: 4px solid #fff;
+      box-shadow: 0 0 15px rgba(0,0,0,0.8);
+      padding: 10px;
     }
     canvas {
-      border: 4px solid #fff;
-      box-shadow: 0 0 20px rgba(0,0,0,0.8);
-      background-color: #3b82f6; /* ハードコート風の青 */
+      background-color: #008080;
+      display: block;
     }
-    .controls {
+    /* ファミコン風コントローラー */
+    .controller {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 400px;
       margin-top: 10px;
+      background-color: #c0c0c0;
+      border: 3px solid #333;
+      padding: 10px 20px;
+      box-sizing: border-box;
+      border-radius: 4px;
+    }
+    .d-pad {
+      position: relative;
+      width: 90px;
+      height: 90px;
+    }
+    .btn-d {
+      position: absolute;
+      background-color: #222;
+      color: #fff;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       font-size: 14px;
-      color: #ccc;
+    }
+    .btn-d:active {
+      background-color: #555;
+    }
+    #btn-up    { top: 0; left: 30px; width: 30px; height: 30px; }
+    #btn-down  { bottom: 0; left: 30px; width: 30px; height: 30px; }
+    #btn-left  { top: 30px; left: 0; width: 30px; height: 30px; }
+    #btn-right { top: 30px; right: 0; width: 30px; height: 30px; }
+    .d-center  { top: 30px; left: 30px; width: 30px; height: 30px; background: #222; position: absolute; }
+
+    .action-buttons {
+      display: flex;
+      gap: 15px;
+    }
+    .btn-action {
+      width: 45px;
+      height: 45px;
+      background-color: #b91c1c;
+      color: #fff;
+      border: 3px solid #7f1d1d;
+      border-radius: 50%;
+      font-weight: bold;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #7f1d1d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-action:active {
+      transform: translateY(4px);
+      box-shadow: 0 0 0 #7f1d1d;
     }
   </style>
 </head>
 <body>
 
-  <h2>🎾 RETRO TENNIS 🎾</h2>
-  <canvas id="gameCanvas" width="400" height="600"></canvas>
-  <div class="controls">
-    操作方法: [←][→][↑][↓] 移動 / [SPACE] 打球
+  <h2>RETRO TENNIS</h2>
+  
+  <div id="game-container">
+    <canvas id="gameCanvas" width="384" height="432"></canvas>
+    
+    <!-- ファミコン風バーチャルコントローラー -->
+    <div class="controller">
+      <div class="d-pad">
+        <button class="btn-d" id="btn-up">▲</button>
+        <button class="btn-d" id="btn-down">▼</button>
+        <button class="btn-d" id="btn-left">◀</button>
+        <button class="btn-d" id="btn-right">▶</button>
+        <div class="d-center"></div>
+      </div>
+      <div class="action-buttons">
+        <div style="text-align:center;">
+          <button class="btn-action" id="btn-b">B</button>
+          <span style="font-size:10px; color:#222; font-weight:bold;">ロブ</span>
+        </div>
+        <div style="text-align:center;">
+          <button class="btn-action" id="btn-a">A</button>
+          <span style="font-size:10px; color:#222; font-weight:bold;">ショット</span>
+        </div>
+      </div>
+    </div>
   </div>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// --- ゲーム設定 ---
-const court = { x: 50, y: 50, w: 300, h: 500 };
-const netY = court.y + court.h / 2;
+// 画像読み込み（先ほど生成したドット絵スプレッドシート）
+const spriteSheet = new Image();
+spriteSheet.src = 'watermarked_img_7459008933091545543.jpg';
 
-// プレイヤー（下側）
+// ゲーム状態
+let scorePlayer = 0;
+let scoreCpu = 0;
+
+// プレイヤー（手前）
 const player = {
-  x: 200, y: 500, r: 12, speed: 4, score: 0,
-  color: '#e11d48'
+  x: 192,
+  y: 360,
+  w: 24,
+  h: 24,
+  speed: 3
 };
 
-// CPU（上側）
+// CPU（奥）
 const cpu = {
-  x: 200, y: 100, r: 12, speed: 2.5, score: 0,
-  color: '#10b981'
+  x: 192,
+  y: 90,
+  w: 24,
+  h: 24,
+  speed: 2
 };
 
 // ボール
 const ball = {
-  x: 200, y: 300, r: 6,
-  vx: 0, vy: 3,
-  speed: 5,
-  color: '#facc15'
+  x: 192,
+  y: 230,
+  z: 0,      // 高度（ロブなどで浮く）
+  vx: 0,
+  vy: 0,
+  vz: 0,
+  speed: 3,
+  active: false
 };
 
-// キー入力状態
-const keys = {};
-window.addEventListener('keydown', e => keys[e.code] = true);
-window.addEventListener('keyup', e => keys[e.code] = false);
+// キー入力管理
+const input = { up: false, down: false, left: false, right: false, a: false, b: false };
 
-// --- メインループ ---
-function update() {
-  // 1. プレイヤー移動
-  if (keys['ArrowLeft'] && player.x - player.r > court.x) player.x -= player.speed;
-  if (keys['ArrowRight'] && player.x + player.r < court.x + court.w) player.x += player.speed;
-  if (keys['ArrowUp'] && player.y - player.r > netY + 20) player.y -= player.speed;
-  if (keys['ArrowDown'] && player.y + player.r < court.y + court.h) player.y += player.speed;
+// キーボードイベント
+window.addEventListener('keydown', e => {
+  if (e.code === 'ArrowUp') input.up = true;
+  if (e.code === 'ArrowDown') input.down = true;
+  if (e.code === 'ArrowLeft') input.left = true;
+  if (e.code === 'ArrowRight') input.right = true;
+  if (e.code === 'KeyZ' || e.code === 'Space') input.a = true; // ZかスペースでA
+  if (e.code === 'KeyX') input.b = true; // XでB
+});
+window.addEventListener('keyup', e => {
+  if (e.code === 'ArrowUp') input.up = false;
+  if (e.code === 'ArrowDown') input.down = false;
+  if (e.code === 'ArrowLeft') input.left = false;
+  if (e.code === 'ArrowRight') input.right = false;
+  if (e.code === 'KeyZ' || e.code === 'Space') input.a = false;
+  if (e.code === 'KeyX') input.b = false;
+});
 
-  // 2. CPU簡易AI（ボールのX座標を追いかける）
-  if (ball.vy < 0) { // ボールが自分に向かってくるとき
-    if (cpu.x < ball.x - 5) cpu.x += cpu.speed;
-    else if (cpu.x > ball.x + 5) cpu.x -= cpu.speed;
-  } else { // センターに戻る
-    if (cpu.x < 200 - 5) cpu.x += cpu.speed * 0.5;
-    else if (cpu.x > 200 + 5) cpu.x -= cpu.speed * 0.5;
-  }
-
-  // 3. ボール移動
-  ball.x += ball.vx;
-  ball.y += ball.vy;
-
-  // 壁バウンド（左右の外枠）
-  if (ball.x - ball.r < court.x || ball.x + ball.r > court.x + court.w) {
-    ball.vx *= -1;
-  }
-
-  // 4. ショット判定 (プレイヤー)
-  let distPlayer = Math.hypot(player.x - ball.x, player.y - ball.y);
-  if (distPlayer < player.r + ball.r + 15 && keys['Space'] && ball.vy > 0) {
-    // 振った位置とボールの位置関係で返球角度を変える
-    let angle = (ball.x - player.x) / player.r;
-    ball.vx = angle * 4;
-    ball.vy = -ball.speed;
-  }
-
-  // 5. ショット判定 (CPU)
-  let distCpu = Math.hypot(cpu.x - ball.x, cpu.y - ball.y);
-  if (distCpu < cpu.r + ball.r + 10 && ball.vy < 0) {
-    let angle = (ball.x - cpu.x) / cpu.r;
-    ball.vx = angle * 4;
-    ball.vy = ball.speed;
-  }
-
-  // 6. 得点判定
-  if (ball.y < court.y - 20) {
-    player.score += 15; // 簡易カウント
-    resetBall('player');
-  } else if (ball.y > court.y + court.h + 20) {
-    cpu.score += 15;
-    resetBall('cpu');
-  }
+// 画面上のコントローラーボタンイベント（スマホ・マウス対応）
+function bindButton(id, keyName) {
+  const el = document.getElementById(id);
+  el.addEventListener('mousedown', () => input[keyName] = true);
+  el.addEventListener('mouseup', () => input[keyName] = false);
+  el.addEventListener('mouseleave', () => input[keyName] = false);
+  el.addEventListener('touchstart', (e) => { e.preventDefault(); input[keyName] = true; });
+  el.addEventListener('touchend', (e) => { e.preventDefault(); input[keyName] = false; });
 }
+bindButton('btn-up', 'up');
+bindButton('btn-down', 'down');
+bindButton('btn-left', 'left');
+bindButton('btn-right', 'right');
+bindButton('btn-a', 'a');
+bindButton('btn-b', 'b');
 
-function resetBall(winner) {
-  ball.x = 200;
-  ball.y = 300;
-  ball.vx = (Math.random() - 0.5) * 2;
-  ball.vy = winner === 'player' ? -3 : 3;
+// サーブまたはリセット
+function resetRally(server) {
+  ball.x = server === 'player' ? player.x : cpu.x;
+  ball.y = server === 'player' ? player.y - 20 : cpu.y + 20;
+  ball.z = 0;
+  ball.vx = 0;
+  ball.vy = 0;
+  ball.vz = 0;
+  ball.active = false;
+}
+resetRally('player');
+
+function update() {
+  // プレイヤー移動（手前コート内制限）
+  if (input.left) player.x -= player.speed;
+  if (input.right) player.x += player.speed;
+  if (input.up) player.y -= player.speed;
+  if (input.down) player.y += player.speed;
+
+  // 移動範囲の制限（手前半分）
+  if (player.x < 48) player.x = 48;
+  if (player.x > 336) player.x = 336;
+  if (player.y < 230) player.y = 230;
+  if (player.y > 400) player.y = 400;
+
+  // CPUの簡易AI（ボールを追いかける）
+  if (ball.active) {
+    if (cpu.x < ball.x - 4) cpu.x += cpu.speed;
+    else if (cpu.x > ball.x + 4) cpu.x -= cpu.speed;
+  } else {
+    // サーブ前は中央へ戻る
+    if (cpu.x < 192) cpu.x += cpu.speed;
+    else if (cpu.x > 192) cpu.x -= cpu.speed;
+  }
+  if (cpu.x < 48) cpu.x = 48;
+  if (cpu.x > 336) cpu.x = 336;
+
+  // ボール移動
+  if (ball.active) {
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+    ball.z += ball.vz;
+    ball.vz -= 0.15; // 重力
+
+    // 着地判定
+    if (ball.z <= 0) {
+      ball.z = 0;
+      // 得点判定（ネットの手前・奥、左右のコート外）
+      if (ball.y < 50) {
+        scorePlayer++;
+        resetRally('cpu');
+      } else if (ball.y > 410) {
+        scoreCpu++;
+        resetRally('player');
+      }
+    }
+
+    // プレイヤーの打球判定
+    let distP = Math.hypot(player.x - ball.x, player.y - ball.y);
+    if (!ball.active || (distP < 25 && ball.y > 210 && ball.z < 15)) {
+      // プレイヤーが打つ
+    }
+  }
+
+  // サーブ / ショット入力
+  if (!ball.active && input.a) {
+    // 通常サーブ
+    ball.active = true;
+    ball.vx = (Math.random() - 0.5) * 2;
+    ball.vy = -4;
+    ball.vz = 2;
+  } else if (ball.active) {
+    // ラリー中の打球（プレイヤー）
+    let distP = Math.hypot(player.x - ball.x, player.y - ball.y);
+    if (distP < 30 && ball.y > 200 && ball.y < 380) {
+      if (input.a) {
+        // 通常ショット
+        ball.vy = -4.5;
+        ball.vz = 1.5;
+        ball.vx = (ball.x - player.x) * 0.15;
+      } else if (input.b) {
+        // ロブ（Bボタン）
+        ball.vy = -3;
+        ball.vz = 4.5; // 高く打ち上げる
+        ball.vx = (ball.x - player.x) * 0.1;
+      }
+    }
+
+    // CPUの打球判定
+    let distC = Math.hypot(cpu.x - ball.x, cpu.y - ball.y);
+    if (distC < 30 && ball.y < 230 && ball.y > 70) {
+      ball.vy = 4.5;
+      ball.vz = 1.5;
+      ball.vx = (ball.x - cpu.x) * 0.15;
+    }
+  }
 }
 
 function draw() {
-  // 背景クリア
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // コート描画
-  ctx.fillStyle = '#16a34a'; // グリーンコート外囲
+  // 背景（コート外の青緑）
+  ctx.fillStyle = '#008080';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#2563eb'; // コート内
-  ctx.fillRect(court.x, court.y, court.w, court.h);
 
-  // コートライン
+  // コート本体（緑）
+  ctx.fillStyle = '#228b22';
+  ctx.fillRect(48, 40, 288, 352);
+
+  // 白線（コートの枠線とサービスライン等）
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(court.x, court.y, court.w, court.h);
+  ctx.lineWidth = 3;
+  ctx.strokeRect(48, 40, 288, 352);
 
-  // ネット
+  // センターライン（縦）
   ctx.beginPath();
-  ctx.moveTo(court.x - 10, netY);
-  ctx.lineTo(court.x + court.w + 10, netY);
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 6;
+  ctx.moveTo(192, 40);
+  ctx.lineTo(192, 392);
   ctx.stroke();
 
+  // サービスライン（横）
+  ctx.strokeRect(48, 120, 288, 192);
+
+  // ネット（中央）
+  ctx.fillStyle = '#111';
+  ctx.fillRect(38, 212, 308, 12);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(38, 212, 308, 12);
+
   // スコア表示
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '16px monospace';
-  ctx.fillText(`CPU: ${cpu.score}`, 10, 25);
-  ctx.fillText(`YOU: ${player.score}`, 10, canvas.height - 15);
+  ctx.fillStyle = '#fff';
+  ctx.font = '14px "Courier New"';
+  ctx.fillText(`CPU: ${scoreCpu}`, 55, 25);
+  ctx.fillText(`YOU: ${scorePlayer}`, 55, 415);
+  ctx.fillText(ball.active ? "ラリー中! [A]ショット [B]ロブ" : "サーブは[A]ボタン！", 140, 25);
 
-  // プレイヤー描画
-  ctx.beginPath();
-  ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
-  ctx.fillStyle = player.color;
-  ctx.fill();
+  // プレイヤー描画（画像があればスプライトから切り抜き、なければ簡易描画）
+  if (spriteSheet.complete && spriteSheet.naturalWidth !== 0) {
+    // スプライトシートから手前キャラを切り出し描画（例として左上のキャラクターを使用）
+    ctx.drawImage(spriteSheet, 0, 0, 48, 48, player.x - 16, player.y - 24, 32, 32);
+    // 奥のCPUキャラ
+    ctx.drawImage(spriteSheet, 0, 0, 48, 48, cpu.x - 16, cpu.y - 24, 32, 32);
+  } else {
+    // 画像未読込時のフォールバック（丸とラケット）
+    ctx.fillStyle = '#ff69b4';
+    ctx.beginPath(); ctx.arc(player.x, player.y, 10, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#00fa9a';
+    ctx.beginPath(); ctx.arc(cpu.x, cpu.y, 10, 0, Math.PI*2); ctx.fill();
+  }
 
-  // CPU描画
-  ctx.beginPath();
-  ctx.arc(cpu.x, cpu.y, cpu.r, 0, Math.PI * 2);
-  ctx.fillStyle = cpu.color;
-  ctx.fill();
+  // ボールと影の描画（高さ z による立体感）
+  let shadowY = ball.y + ball.z;
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath(); ctx.arc(ball.x, shadowY, 4, 0, Math.PI*2); ctx.fill();
 
-  // ボール描画
-  ctx.beginPath();
-  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-  ctx.fillStyle = ball.color;
-  ctx.fill();
+  let ballScreenY = ball.y - ball.z;
+  ctx.fillStyle = '#ffffe0';
+  ctx.beginPath(); ctx.arc(ball.x, ballScreenY, 5, 0, Math.PI*2); ctx.fill();
 }
 
-function gameLoop() {
+function loop() {
   update();
   draw();
-  requestAnimationFrame(gameLoop);
+  requestAnimationFrame(loop);
 }
 
-gameLoop();
+// 画像読み込み完了後にメインループ開始
+spriteSheet.onload = () => {
+  loop();
+};
+// 万が一画像が読み込めなくても動くようにする
+setTimeout(() => {
+  if (!ball.active && scorePlayer === 0 && scoreCpu === 0) {
+    loop();
+  }
+}, 500);
 </script>
+
 </body>
 </html>
