@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Retro Tennis Game</title>
+  <style>
+    body {
+      background-color: #222;
+      color: #fff;
+      font-family: monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    canvas {
+      border: 4px solid #fff;
+      box-shadow: 0 0 20px rgba(0,0,0,0.8);
+      background-color: #3b82f6; /* ハードコート風の青 */
+    }
+    .controls {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #ccc;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>🎾 RETRO TENNIS 🎾</h2>
+  <canvas id="gameCanvas" width="400" height="600"></canvas>
+  <div class="controls">
+    操作方法: [←][→][↑][↓] 移動 / [SPACE] 打球
+  </div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// --- ゲーム設定 ---
+const court = { x: 50, y: 50, w: 300, h: 500 };
+const netY = court.y + court.h / 2;
+
+// プレイヤー（下側）
+const player = {
+  x: 200, y: 500, r: 12, speed: 4, score: 0,
+  color: '#e11d48'
+};
+
+// CPU（上側）
+const cpu = {
+  x: 200, y: 100, r: 12, speed: 2.5, score: 0,
+  color: '#10b981'
+};
+
+// ボール
+const ball = {
+  x: 200, y: 300, r: 6,
+  vx: 0, vy: 3,
+  speed: 5,
+  color: '#facc15'
+};
+
+// キー入力状態
+const keys = {};
+window.addEventListener('keydown', e => keys[e.code] = true);
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+// --- メインループ ---
+function update() {
+  // 1. プレイヤー移動
+  if (keys['ArrowLeft'] && player.x - player.r > court.x) player.x -= player.speed;
+  if (keys['ArrowRight'] && player.x + player.r < court.x + court.w) player.x += player.speed;
+  if (keys['ArrowUp'] && player.y - player.r > netY + 20) player.y -= player.speed;
+  if (keys['ArrowDown'] && player.y + player.r < court.y + court.h) player.y += player.speed;
+
+  // 2. CPU簡易AI（ボールのX座標を追いかける）
+  if (ball.vy < 0) { // ボールが自分に向かってくるとき
+    if (cpu.x < ball.x - 5) cpu.x += cpu.speed;
+    else if (cpu.x > ball.x + 5) cpu.x -= cpu.speed;
+  } else { // センターに戻る
+    if (cpu.x < 200 - 5) cpu.x += cpu.speed * 0.5;
+    else if (cpu.x > 200 + 5) cpu.x -= cpu.speed * 0.5;
+  }
+
+  // 3. ボール移動
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  // 壁バウンド（左右の外枠）
+  if (ball.x - ball.r < court.x || ball.x + ball.r > court.x + court.w) {
+    ball.vx *= -1;
+  }
+
+  // 4. ショット判定 (プレイヤー)
+  let distPlayer = Math.hypot(player.x - ball.x, player.y - ball.y);
+  if (distPlayer < player.r + ball.r + 15 && keys['Space'] && ball.vy > 0) {
+    // 振った位置とボールの位置関係で返球角度を変える
+    let angle = (ball.x - player.x) / player.r;
+    ball.vx = angle * 4;
+    ball.vy = -ball.speed;
+  }
+
+  // 5. ショット判定 (CPU)
+  let distCpu = Math.hypot(cpu.x - ball.x, cpu.y - ball.y);
+  if (distCpu < cpu.r + ball.r + 10 && ball.vy < 0) {
+    let angle = (ball.x - cpu.x) / cpu.r;
+    ball.vx = angle * 4;
+    ball.vy = ball.speed;
+  }
+
+  // 6. 得点判定
+  if (ball.y < court.y - 20) {
+    player.score += 15; // 簡易カウント
+    resetBall('player');
+  } else if (ball.y > court.y + court.h + 20) {
+    cpu.score += 15;
+    resetBall('cpu');
+  }
+}
+
+function resetBall(winner) {
+  ball.x = 200;
+  ball.y = 300;
+  ball.vx = (Math.random() - 0.5) * 2;
+  ball.vy = winner === 'player' ? -3 : 3;
+}
+
+function draw() {
+  // 背景クリア
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // コート描画
+  ctx.fillStyle = '#16a34a'; // グリーンコート外囲
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#2563eb'; // コート内
+  ctx.fillRect(court.x, court.y, court.w, court.h);
+
+  // コートライン
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(court.x, court.y, court.w, court.h);
+
+  // ネット
+  ctx.beginPath();
+  ctx.moveTo(court.x - 10, netY);
+  ctx.lineTo(court.x + court.w + 10, netY);
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 6;
+  ctx.stroke();
+
+  // スコア表示
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '16px monospace';
+  ctx.fillText(`CPU: ${cpu.score}`, 10, 25);
+  ctx.fillText(`YOU: ${player.score}`, 10, canvas.height - 15);
+
+  // プレイヤー描画
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+  ctx.fillStyle = player.color;
+  ctx.fill();
+
+  // CPU描画
+  ctx.beginPath();
+  ctx.arc(cpu.x, cpu.y, cpu.r, 0, Math.PI * 2);
+  ctx.fillStyle = cpu.color;
+  ctx.fill();
+
+  // ボール描画
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fillStyle = ball.color;
+  ctx.fill();
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
