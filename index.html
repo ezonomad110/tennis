@@ -136,10 +136,9 @@ const ctx = canvas.getContext('2d');
 let scorePlayer = 0;
 let scoreCpu = 0;
 
-// ファミリーテニス解析に基づく速度・移動係数
 const player = { x: 192, y: 350, speed: 4.2, animFrame: 0, isMoving: false };
-const cpu = { x: 192, y: 110, speed: 2.8, animFrame: 0, isMoving: false };
-const ball = { x: 192, y: 330, z: 0, vx: 0, vy: 0, vz: 0, active: false };
+const cpu = { x: 192, y: 110, speed: 2.6, animFrame: 0, isMoving: false };
+const ball = { x: 192, y: 330, z: 0, vx: 0, vy: 0, vz: 0, active: false, lastHitter: 'player' };
 
 let rallyCount = 0;
 let judgeMessage = { text: "", timer: 0 };
@@ -230,6 +229,7 @@ function resetRally() {
   ball.z = 0;
   ball.vx = 0; ball.vy = 0; ball.vz = 0;
   ball.active = false;
+  ball.lastHitter = 'player';
   rallyCount = 0;
 }
 resetRally();
@@ -269,9 +269,9 @@ function update() {
   if (cpu.x < 75) cpu.x = 75;
   if (cpu.x > 309) cpu.x = 309;
 
-  // ボール移動（ファミリーテニス実測の軽快なテンポ）
+  // ボール移動
   if (ball.active) {
-    let speedMult = 1 + Math.min(rallyCount * 0.06, 0.5);
+    let speedMult = 1 + Math.min(rallyCount * 0.05, 0.4);
     ball.x += ball.vx * speedMult;
     ball.y += ball.vy * speedMult;
     ball.z += ball.vz;
@@ -282,19 +282,43 @@ function update() {
       let isOut = (ball.x < 39 || ball.x > 345);
 
       if (ball.y < 65) {
+        // 奥側（CPU側）エリアへの着地
         if (isOut) {
           judgeMessage = { text: "OUT!", timer: 45 };
-          scorePlayer++;
+          // 最後に打ったのがプレイヤーなら、プレイヤーのミス（CPUの得点）
+          // 最後に打ったのがCPUなら、CPUがアウトにした（プレイヤーの得点）
+          if (ball.lastHitter === 'player') {
+            scoreCpu++;
+          } else {
+            scorePlayer++;
+          }
         } else {
-          scoreCpu++;
+          // インの場合：最後に打ったのがプレイヤーならプレイヤーの得点、CPUならCPUの得点
+          if (ball.lastHitter === 'player') {
+            scorePlayer++;
+          } else {
+            scoreCpu++;
+          }
         }
         resetRally();
       } else if (ball.y > 405) {
+        // 手前側（プレイヤー側）エリアへの着地
         if (isOut) {
           judgeMessage = { text: "OUT!", timer: 45 };
-          scoreCpu++;
+          // 最後に打ったのがCPUなら、CPUのミス（プレイヤーの得点）
+          // 最後に打ったのがプレイヤーなら、プレイヤーがアウトにした（CPUの得点）
+          if (ball.lastHitter === 'cpu') {
+            scorePlayer++;
+          } else {
+            scoreCpu++;
+          }
         } else {
-          scorePlayer++;
+          // インの場合
+          if (ball.lastHitter === 'cpu') {
+            scoreCpu++;
+          } else {
+            scorePlayer++;
+          }
         }
         resetRally();
       }
@@ -310,6 +334,7 @@ function update() {
     ball.vx = (192 - ball.x) * 0.015;
     ball.vy = -4.2;
     ball.vz = 2.4;
+    ball.lastHitter = 'player';
     rallyCount = 1;
     effect = { x: player.x, y: player.y - 15, timer: 15 };
   } 
@@ -319,18 +344,23 @@ function update() {
     if (distP < 48 && ball.y > 210 && ball.y < 390) {
       if (input.a || input.b) {
         rallyCount++;
+        ball.lastHitter = 'player';
         let isLob = input.b;
-        let angleFactor = 1 - Math.abs(player.x - ball.x) * 0.0025;
-        angleFactor = Math.max(angleFactor, 0.85);
+
+        // 【ご要望のスピード調整】：直線（中央付近）は速く、角度がつくほどスピードを落とす
+        let absOffset = Math.abs(player.x - ball.x);
+        let speedFactor = Math.max(0.65, 1.0 - (absOffset * 0.012));
+
+        let baseVx = (ball.x - player.x) * 0.15;
 
         if (isLob) {
-          ball.vy = -3.2 * angleFactor; 
+          ball.vy = -3.0 * speedFactor; 
           ball.vz = 4.5;
-          ball.vx = (ball.x - player.x) * 0.09;
+          ball.vx = baseVx;
         } else {
-          ball.vy = -5.0 * angleFactor; 
+          ball.vy = -5.0 * speedFactor; 
           ball.vz = 1.7;
-          ball.vx = (ball.x - player.x) * 0.14;
+          ball.vx = baseVx;
         }
         effect = { x: ball.x, y: ball.y, timer: 15 };
       }
@@ -339,9 +369,15 @@ function update() {
     let distC = Math.hypot(cpu.x - ball.x, cpu.y - ball.y);
     if (distC < 48 && ball.y < 220 && ball.y > 60) {
       rallyCount++;
-      ball.vy = 4.8; 
+      ball.lastHitter = 'cpu';
+
+      // CPU側も同様に、中央は直線的に速く、サイドを狙うと少しスピードが緩む自然なラリーバランス
+      let cpuOffset = Math.abs(cpu.x - ball.x);
+      let cpuSpeedFactor = Math.max(0.7, 1.0 - (cpuOffset * 0.01));
+
+      ball.vy = 4.6 * cpuSpeedFactor; 
       ball.vz = 1.7;
-      ball.vx = (192 - cpu.x) * 0.08 + (Math.random() - 0.5) * 1.2;
+      ball.vx = (192 - cpu.x) * 0.07 + (Math.random() - 0.5) * 1.0;
     }
   }
 }
