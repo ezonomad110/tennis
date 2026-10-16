@@ -140,7 +140,10 @@ const player = { x: 192, y: 350, speed: 3.5, animFrame: 0, isMoving: false };
 const cpu = { x: 192, y: 110, speed: 2.2, animFrame: 0, isMoving: false };
 const ball = { x: 192, y: 330, z: 0, vx: 0, vy: 0, vz: 0, active: false };
 
+let rallyCount = 0; // ラリー継続回数
+let judgeMessage = { text: "", timer: 0 }; // ミス判定表示用
 let effect = { x: 0, y: 0, timer: 0 };
+
 const input = { moveX: 0, moveY: 0, a: false, b: false };
 
 const keys = { up: false, down: false, left: false, right: false };
@@ -226,6 +229,7 @@ function resetRally() {
   ball.z = 0;
   ball.vx = 0; ball.vy = 0; ball.vz = 0;
   ball.active = false;
+  rallyCount = 0; // ラリールセット
 }
 resetRally();
 
@@ -264,18 +268,30 @@ function update() {
   if (cpu.x < 75) cpu.x = 75;
   if (cpu.x > 309) cpu.x = 309;
 
+  // ボール移動
   if (ball.active) {
-    ball.x += ball.vx;
-    ball.y += ball.vy;
+    // ラリーが続くほど速度がアップ（最大1.8倍まで加速）
+    let speedMult = 1 + Math.min(rallyCount * 0.08, 0.8);
+    ball.x += ball.vx * speedMult;
+    ball.y += ball.vy * speedMult;
     ball.z += ball.vz;
     ball.vz -= 0.14;
 
     if (ball.z <= 0) {
       ball.z = 0;
+      // 着地判定（アウト・ネット・イン）
       if (ball.y < 65) {
+        // 奥側エリアでの着地
+        if (ball.x < 39 || ball.x > 345) {
+          judgeMessage = { text: "OUT!", timer: 45 };
+        }
         scorePlayer++;
         resetRally();
       } else if (ball.y > 405) {
+        // 手前側エリアでの着地
+        if (ball.x < 39 || ball.x > 345) {
+          judgeMessage = { text: "OUT!", timer: 45 };
+        }
         scoreCpu++;
         resetRally();
       }
@@ -283,6 +299,7 @@ function update() {
   }
 
   if (effect.timer > 0) effect.timer--;
+  if (judgeMessage.timer > 0) judgeMessage.timer--;
 
   // サーブ
   if (!ball.active && (input.a || input.b)) {
@@ -290,24 +307,30 @@ function update() {
     ball.vx = (192 - ball.x) * 0.015;
     ball.vy = -4.5;
     ball.vz = 2.2;
+    rallyCount = 1;
     effect = { x: player.x, y: player.y - 15, timer: 15 };
   } 
-  // ラリー中の打球判定（Aボタン・Bボタン共通の完全同一判定）
+  // ラリー中の打球判定（A・Bボタン共通、ワイドな球は少し速度を落として追いつきやすく調整）
   else if (ball.active) {
     let distP = Math.hypot(player.x - ball.x, player.y - ball.y);
-    // プレイヤーがボールのヒット範囲（45px以内）にいて、手前コートにボールがあるとき
     if (distP < 45 && ball.y > 210 && ball.y < 390) {
-      if (input.a) {
-        // Aボタン：通常のショット
-        ball.vy = -5.2; 
-        ball.vz = 1.6;
-        ball.vx = (ball.x - player.x) * 0.15;
-        effect = { x: ball.x, y: ball.y, timer: 15 };
-      } else if (input.b) {
-        // Bボタン：ロブ（判定条件をAボタンと完全に同期）
-        ball.vy = -3.2; 
-        ball.vz = 4.8;
-        ball.vx = (ball.x - player.x) * 0.1;
+      if (input.a || input.b) {
+        rallyCount++;
+        let isLob = input.b;
+        
+        // 角度（サイドへの切れ方）が急なほど、少しだけスピードを穏やかにして追いつきやすくする補正
+        let angleFactor = 1 - Math.abs(player.x - ball.x) * 0.003;
+        angleFactor = Math.max(angleFactor, 0.8);
+
+        if (isLob) {
+          ball.vy = -3.0 * angleFactor; 
+          ball.vz = 4.8;
+          ball.vx = (ball.x - player.x) * 0.09;
+        } else {
+          ball.vy = -4.8 * angleFactor; 
+          ball.vz = 1.6;
+          ball.vx = (ball.x - player.x) * 0.13;
+        }
         effect = { x: ball.x, y: ball.y, timer: 15 };
       }
     }
@@ -446,12 +469,21 @@ function draw() {
   ctx.lineWidth = 1;
   ctx.strokeRect(netLeftX - 10, netY - 8, (netRightX - netLeftX) + 20, 16);
 
-  // スコア表示
+  // スコア表示 ＆ ラリー数表示
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 14px "Courier New"';
   ctx.fillText(`YOU: ${scorePlayer}`, 45, 25);
   ctx.fillText(`CPU: ${scoreCpu}`, 280, 25);
-  ctx.fillText(ball.active ? "ラリー中!" : "サーブは[A/B]!", 130, 25);
+  ctx.fillText(ball.active ? `RALLY:${rallyCount}` : "サーブは[A/B]", 145, 25);
+
+  // ミス判定（OUT!等）の文字表示演出
+  if (judgeMessage.timer > 0) {
+    ctx.fillStyle = '#ff3333';
+    ctx.font = 'bold 28px "Courier New"';
+    ctx.textAlign = 'center';
+    ctx.fillText(judgeMessage.text, canvas.width / 2, canvas.height / 2 - 20);
+    ctx.textAlign = 'left';
+  }
 
   // ヒットエリアの可視化
   if (ball.active && ball.y > 210 && ball.y < 390) {
