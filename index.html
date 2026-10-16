@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Retro Arcade Tennis</title>
+  <title>Retro 3D Tennis Game</title>
   <style>
     body {
       background-color: #111;
@@ -43,7 +43,6 @@
       height: auto;
       max-height: 50vh;
     }
-    /* アーケード筐体風のコントローラー台座 */
     .controller {
       display: flex;
       justify-content: space-between;
@@ -56,7 +55,6 @@
       box-sizing: border-box;
       border-radius: 6px;
     }
-    /* アーケードスティック */
     .joystick-base {
       position: relative;
       width: 100px;
@@ -79,7 +77,6 @@
       cursor: pointer;
       transition: transform 0.05s ease-out;
     }
-
     .action-buttons {
       display: flex;
       gap: 20px;
@@ -115,13 +112,10 @@
   <div id="game-container">
     <canvas id="gameCanvas" width="384" height="432"></canvas>
     
-    <!-- アーケード風コントローラー -->
     <div class="controller">
-      <!-- ジョイスティック -->
       <div class="joystick-base" id="joystickBase">
         <div class="joystick-stick" id="joystickStick"></div>
       </div>
-      <!-- A・Bボタン -->
       <div class="action-buttons">
         <div class="btn-action-container">
           <button class="btn-action" id="btn-b">B</button>
@@ -139,19 +133,28 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+// --- 画像読み込み（IMG_8747.JPG） ---
+const spriteSheet = new Image();
+spriteSheet.src = 'IMG_8747.JPG';
+let imageLoaded = false;
+spriteSheet.onload = () => { imageLoaded = true; };
+
 // スコア
 let scorePlayer = 0;
 let scoreCpu = 0;
 
-// キャラクターとボール
-const player = { x: 240, y: 380, speed: 3.5 };
-const cpu = { x: 192, y: 80, speed: 2.2 };
-const ball = { x: 240, y: 370, z: 0, vx: 0, vy: 0, vz: 0, active: false };
+// キャラクターとボール（常にプレイヤーは手前、CPUは奥）
+const player = { x: 192, y: 360, speed: 3.5 };
+const cpu = { x: 192, y: 90, speed: 2.2 };
+const ball = { x: 192, y: 340, z: 0, vx: 0, vy: 0, vz: 0, active: false };
 
-// 入力状態（ジョイスティックの移動ベクトル vx, vy）
+// エフェクト管理（打った瞬間に表示）
+let effect = { x: 0, y: 0, timer: 0 };
+
+// 入力状態
 const input = { moveX: 0, moveY: 0, a: false, b: false };
 
-// --- キーボード操作対応（矢印キーでスティック代わり） ---
+// キーボード
 const keys = { up: false, down: false, left: false, right: false };
 window.addEventListener('keydown', e => {
   if (e.code === 'ArrowUp') keys.up = true;
@@ -170,30 +173,23 @@ window.addEventListener('keyup', e => {
   if (e.code === 'KeyX') input.b = false;
 });
 
-// --- アーケードスティック（タッチ・マウス操作）の実装 ---
+// アーケードスティック操作
 const base = document.getElementById('joystickBase');
 const stick = document.getElementById('joystickStick');
-const maxDist = 30; // スティックが動く最大距離
+const maxDist = 30;
 
 function handleJoystickMove(clientX, clientY) {
   const rect = base.getBoundingClientRect();
-  const centerX = rect.left + rect.width / 2;
-  const centerY = rect.top + rect.height / 2;
-  
-  let dx = clientX - centerX;
-  let dy = clientY - centerY;
+  let dx = clientX - (rect.left + rect.width / 2);
+  let dy = clientY - (rect.top + rect.height / 2);
   let dist = Math.hypot(dx, dy);
 
   if (dist > maxDist) {
     dx = (dx / dist) * maxDist;
     dy = (dy / dist) * maxDist;
-    dist = maxDist;
   }
 
-  // スティックの見た目の位置を更新
   stick.style.transform = `translate(${dx}px, ${dy}px)`;
-
-  // 移動量を正規化(-1 〜 1)して入力に反映
   input.moveX = dx / maxDist;
   input.moveY = dy / maxDist;
 }
@@ -204,34 +200,22 @@ function resetJoystick() {
   input.moveY = 0;
 }
 
-// マウスイベント
 let isDragging = false;
 base.addEventListener('mousedown', (e) => { isDragging = true; handleJoystickMove(e.clientX, e.clientY); });
 window.addEventListener('mousemove', (e) => { if (isDragging) handleJoystickMove(e.clientX, e.clientY); });
 window.addEventListener('mouseup', () => { if (isDragging) { isDragging = false; resetJoystick(); } });
 
-// タッチイベント（スマホ用グリグリ操作）
 base.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  isDragging = true;
+  e.preventDefault(); isDragging = true;
   handleJoystickMove(e.touches[0].clientX, e.touches[0].clientY);
 }, {passive: false});
 
 window.addEventListener('touchmove', (e) => {
-  if (isDragging) {
-    e.preventDefault();
-    handleJoystickMove(e.touches[0].clientX, e.touches[0].clientY);
-  }
+  if (isDragging) { e.preventDefault(); handleJoystickMove(e.touches[0].clientX, e.touches[0].clientY); }
 }, {passive: false});
 
-window.addEventListener('touchend', () => {
-  if (isDragging) {
-    isDragging = false;
-    resetJoystick();
-  }
-});
+window.addEventListener('touchend', () => { if (isDragging) { isDragging = false; resetJoystick(); } });
 
-// A・Bボタンのセットアップ
 function setupActionButton(id, keyName) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -247,29 +231,22 @@ function setupActionButton(id, keyName) {
 setupActionButton('btn-a', 'a');
 setupActionButton('btn-b', 'b');
 
-// サーブ・ラリー位置のリセット
-function resetRally(server) {
-  if (server === 'player') {
-    player.x = 240;
-    player.y = 380;
-    ball.x = 240;
-    ball.y = 370;
-  } else {
-    cpu.x = 192;
-    cpu.y = 70;
-    ball.x = 192;
-    ball.y = 90;
-  }
+function resetRally() {
+  player.x = 192;
+  player.y = 360;
+  cpu.x = 192;
+  cpu.y = 90;
+  ball.x = 192;
+  ball.y = 340;
   ball.z = 0;
   ball.vx = 0;
   ball.vy = 0;
   ball.vz = 0;
   ball.active = false;
 }
-resetRally('player');
+resetRally();
 
 function update() {
-  // キーボード入力をベクトルに合成
   let kx = 0, ky = 0;
   if (keys.left) kx = -1;
   if (keys.right) kx = 1;
@@ -279,26 +256,22 @@ function update() {
   let mx = input.moveX !== 0 ? input.moveX : kx;
   let my = input.moveY !== 0 ? input.moveY : ky;
 
-  // プレイヤー移動（なめらかな全方位移動）
+  // プレイヤー移動（手前コートの範囲内）
   player.x += mx * player.speed;
   player.y += my * player.speed;
 
-  // コート内制限
-  if (player.x < 48) player.x = 48;
-  if (player.x > 336) player.x = 336;
-  if (player.y < 230) player.y = 230;
-  if (player.y > 400) player.y = 400;
+  if (player.x < 55) player.x = 55;
+  if (player.x > 329) player.x = 329;
+  if (player.y < 235) player.y = 235;
+  if (player.y > 395) player.y > 395 ? 395 : player.y;
 
   // CPU AI
   if (ball.active) {
     if (cpu.x < ball.x - 4) cpu.x += cpu.speed;
     else if (cpu.x > ball.x + 4) cpu.x -= cpu.speed;
-  } else {
-    if (cpu.x < 192) cpu.x += cpu.speed;
-    else if (cpu.x > 192) cpu.x -= cpu.speed;
   }
-  if (cpu.x < 48) cpu.x = 48;
-  if (cpu.x > 336) cpu.x = 336;
+  if (cpu.x < 75) cpu.x = 75;
+  if (cpu.x > 309) cpu.x = 309;
 
   // ボール移動
   if (ball.active) {
@@ -307,111 +280,138 @@ function update() {
     ball.z += ball.vz;
     ball.vz -= 0.14; // 重力
 
+    // 着地判定
     if (ball.z <= 0) {
       ball.z = 0;
-      if (ball.y < 40) {
-        scorePlayer++;
-        resetRally('cpu');
-      } else if (ball.y > 392) {
-        scoreCpu++;
-        resetRally('player');
+      if (ball.y < 65) {
+        scorePlayer++; // プレイヤー側の得点
+        resetRally();
+      } else if (ball.y > 405) {
+        scoreCpu++; // CPU側の得点
+        resetRally();
       }
     }
   }
 
-  // サーブ / ショット入力
+  // エフェクトタイマー減少
+  if (effect.timer > 0) effect.timer--;
+
+  // サーブ / 打球判定
   if (!ball.active && input.a) {
     ball.active = true;
-    ball.vx = -1.2;
+    ball.vx = (Math.random() - 0.5) * 2;
     ball.vy = -4.5;
     ball.vz = 2.2;
+    effect = { x: player.x, y: player.y - 15, timer: 15 };
   } else if (ball.active) {
+    // プレイヤーの打球
     let distP = Math.hypot(player.x - ball.x, player.y - ball.y);
-    if (distP < 35 && ball.y > 200 && ball.y < 390) {
+    if (distP < 35 && ball.y > 210 && ball.y < 390) {
       if (input.a) {
-        ball.vy = -5.0;
-        ball.vz = 1.5;
+        ball.vy = -5.2;
+        ball.vz = 1.6;
         ball.vx = (ball.x - player.x) * 0.15;
+        effect = { x: ball.x, y: ball.y, timer: 15 };
       } else if (input.b) {
         ball.vy = -3.2;
         ball.vz = 4.8; // ロブ
         ball.vx = (ball.x - player.x) * 0.1;
+        effect = { x: ball.x, y: ball.y, timer: 15 };
       }
     }
 
+    // CPUの打球
     let distC = Math.hypot(cpu.x - ball.x, cpu.y - ball.y);
-    if (distC < 35 && ball.y < 230 && ball.y > 50) {
-      ball.vy = 5.0;
-      ball.vz = 1.5;
+    if (distC < 35 && ball.y < 220 && ball.y > 60) {
+      ball.vy = 5.2;
+      ball.vz = 1.6;
       ball.vx = (ball.x - cpu.x) * 0.15;
     }
   }
 }
 
-// ドット絵風キャラ描画
-function drawRetroCharacter(x, y, isPlayer) {
-  ctx.save();
-  ctx.translate(x, y);
-  
-  ctx.fillStyle = isPlayer ? '#ff69b4' : '#00fa9a';
-  ctx.fillRect(-8, -10, 16, 16);
-  
-  ctx.fillStyle = '#ffdead';
-  ctx.fillRect(-6, -20, 12, 11);
-  ctx.fillStyle = '#222';
-  ctx.fillRect(-6, -22, 12, 5);
-  
-  ctx.fillStyle = '#fff';
-  ctx.strokeStyle = '#333';
-  ctx.lineWidth = 2;
-  if (isPlayer) {
-    ctx.beginPath(); ctx.ellipse(12, -8, 6, 8, Math.PI/4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-  } else {
-    ctx.beginPath(); ctx.ellipse(-12, -8, 6, 8, -Math.PI/4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-  }
-  
-  ctx.restore();
-}
-
 function draw() {
+  // 背景（青緑の全体背景）
   ctx.fillStyle = '#008080';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // コート本体
-  ctx.fillStyle = '#228b22';
-  ctx.fillRect(48, 40, 288, 352);
+  // --- 【立体感のあるパースペクティブ（台形）コートの描画】 ---
+  // 奥の幅が狭く、手前の幅が広い立体的なコート
+  const tlX = 75, tlY = 65;   // 左奥
+  const trX = 309, trY = 65;  // 右奥
+  const brX = 345, brY = 405; // 右手前
+  const blX = 39, blY = 405;  // 左手前
 
-  // 白線
+  // コート本体（緑）
+  ctx.fillStyle = '#228b22';
+  ctx.beginPath();
+  ctx.moveTo(blX, blY); ctx.lineTo(tlX, tlY);
+  ctx.lineTo(trX, trY); ctx.lineTo(brX, brY);
+  ctx.closePath();
+  ctx.fill();
+
+  // 外枠の白線
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 3;
-  ctx.strokeRect(48, 40, 288, 352);
-
-  ctx.beginPath();
-  ctx.moveTo(192, 40);
-  ctx.lineTo(192, 392);
   ctx.stroke();
 
-  ctx.strokeRect(48, 120, 288, 192);
+  // センターライン（縦）
+  ctx.beginPath();
+  ctx.moveTo(192, 65);
+  ctx.lineTo(192, 405);
+  ctx.stroke();
 
-  // ネット
+  // サービスライン（横・奥と手前）
+  // 奥側サービスライン
+  let sTopY = 65 + (405 - 65) * 0.35;
+  let sTopLeftX = blX + (tlX - blX) * 0.35;
+  let sTopRightX = brX + (trX - brX) * 0.35;
+  // 手前側サービスライン
+  let sBotY = 65 + (405 - 65) * 0.65;
+  let sBotLeftX = blX + (tlX - blX) * 0.65;
+  let sBotRightX = brX + (trX - brX) * 0.65;
+
+  ctx.beginPath();
+  ctx.moveTo(sTopLeftX, sTopY); ctx.lineTo(sTopRightX, sTopY);
+  ctx.moveTo(sBotLeftX, sBotY); ctx.lineTo(sBotRightX, sBotY);
+  ctx.stroke();
+
+  // ネット（中央・立体的な厚み表現）
+  let netY = 65 + (405 - 65) * 0.5;
+  let netLeftX = blX + (tlX - blX) * 0.5 - 12;
+  let netRightX = brX + (trX - brX) * 0.5 + 12;
+
   ctx.fillStyle = '#111';
-  ctx.fillRect(38, 212, 308, 12);
+  ctx.fillRect(netLeftX - 10, netY - 8, (netRightX - netLeftX) + 20, 16);
   ctx.strokeStyle = '#fff';
   ctx.lineWidth = 1;
-  ctx.strokeRect(38, 212, 308, 12);
+  ctx.strokeRect(netLeftX - 10, netY - 8, (netRightX - netLeftX) + 20, 16);
 
-  // スコア・案内
+  // --- スコア表示 ---
   ctx.fillStyle = '#fff';
-  ctx.font = '13px "Courier New"';
-  ctx.fillText(`CPU: ${scoreCpu}`, 55, 25);
-  ctx.fillText(`YOU: ${scorePlayer}`, 55, 415);
-  ctx.fillText(ball.active ? "ラリー中! [A]ショット [B]ロブ" : "ベースラインから [A]サーブ！", 110, 25);
+  ctx.font = 'bold 14px "Courier New"';
+  ctx.fillText(`YOU: ${scorePlayer}`, 45, 25);
+  ctx.fillText(`CPU: ${scoreCpu}`, 280, 25);
+  ctx.fillText(ball.active ? "ラリー中!" : "サーブは[A]!", 140, 25);
 
-  // キャラクター描画
-  drawRetroCharacter(player.x, player.y, true);
-  drawRetroCharacter(cpu.x, cpu.y, false);
+  // --- キャラクター描画（IMG_8747.JPG から正確に切り出し） ---
+  if (imageLoaded) {
+    const sw = spriteSheet.width / 10;
+    const sh = spriteSheet.height / 9;
 
-  // ボールと影
+    // 手前プレイヤー（後ろ向きのコマ：例として上から2段目、左から3・4番目付近の背中を向いたポーズ）
+    // スプライトシートのグリッド位置 [col=2, row=1] 付近の後ろ姿を切り出し
+    ctx.drawImage(spriteSheet, sw * 2, sh * 1, sw, sh, player.x - 20, player.y - 28, 40, 40);
+
+    // 奥側CPU（前向き・正面向きのコマ：上から0段目、左から0番目付近）
+    ctx.drawImage(spriteSheet, 0, 0, sw, sh, cpu.x - 18, cpu.y - 28, 36, 36);
+  } else {
+    // フォールバック描画
+    ctx.fillStyle = '#ff69b4'; ctx.fillRect(player.x - 12, player.y - 18, 24, 28);
+    ctx.fillStyle = '#00fa9a'; ctx.fillRect(cpu.x - 12, cpu.y - 18, 24, 28);
+  }
+
+  // --- ボールと影 ---
   let shadowY = ball.y + ball.z;
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.beginPath(); ctx.arc(ball.x, shadowY, 4, 0, Math.PI*2); ctx.fill();
@@ -419,6 +419,14 @@ function draw() {
   let ballScreenY = ball.y - ball.z;
   ctx.fillStyle = '#ffffe0';
   ctx.beginPath(); ctx.arc(ball.x, ballScreenY, 5, 0, Math.PI*2); ctx.fill();
+
+  // --- 打球エフェクト（IMG_8747.JPG の右下のコマを切り出し表示） ---
+  if (effect.timer > 0 && imageLoaded) {
+    const sw = spriteSheet.width / 10;
+    const sh = spriteSheet.height / 9;
+    // スプライトシートの右下 [col=9, row=8] 付近にあるヒットエフェクトを切り出し
+    ctx.drawImage(spriteSheet, sw * 9, sh * 8, sw, sh, effect.x - 16, effect.y - 16, 32, 32);
+  }
 }
 
 function loop() {
