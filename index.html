@@ -133,17 +133,11 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// --- 画像読み込み（IMG_8747.JPG） ---
-const spriteSheet = new Image();
-spriteSheet.src = 'IMG_8747.JPG';
-let imageLoaded = false;
-spriteSheet.onload = () => { imageLoaded = true; };
-
 // スコア
 let scorePlayer = 0;
 let scoreCpu = 0;
 
-// キャラクターとボール
+// キャラクターとボール（プレイヤーは手前固定、CPUは奥固定）
 const player = { x: 192, y: 350, speed: 3.5 };
 const cpu = { x: 192, y: 110, speed: 2.2 };
 const ball = { x: 192, y: 330, z: 0, vx: 0, vy: 0, vz: 0, active: false };
@@ -304,6 +298,38 @@ function update() {
   }
 }
 
+// --- レトロ調のドット絵風キャラクターを描画する関数 ---
+function drawRetroCharacter(x, y, isPlayer) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  if (isPlayer) {
+    // 手前プレイヤー（後ろ向きのドット絵風）
+    ctx.fillStyle = '#ff69b4'; // ピンクのウェア
+    ctx.fillRect(-10, -12, 20, 18);
+    ctx.fillStyle = '#ffdead'; // 肌（首・頭）
+    ctx.fillRect(-8, -22, 16, 12);
+    ctx.fillStyle = '#111'; // 黒髪（後ろ姿）
+    ctx.fillRect(-8, -25, 16, 8);
+    // ラケット（右手側）
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(14, -10, 6, 9, Math.PI/4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  } else {
+    // 奥側CPU（正面・前向きのドット絵風）
+    ctx.fillStyle = '#00fa9a'; // ミントグリーンのウェア
+    ctx.fillRect(-10, -12, 20, 18);
+    ctx.fillStyle = '#ffdead'; // 肌・顔
+    ctx.fillRect(-8, -20, 16, 10);
+    ctx.fillStyle = '#111'; // 髪
+    ctx.fillRect(-8, -22, 16, 6);
+    // ラケット
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(-14, -10, 6, 9, -Math.PI/4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
 function draw() {
   ctx.fillStyle = '#008080';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -359,22 +385,9 @@ function draw() {
   ctx.fillText(`CPU: ${scoreCpu}`, 280, 25);
   ctx.fillText(ball.active ? "ラリー中!" : "サーブは[A]!", 140, 25);
 
-  // --- キャラクターの切り出し描画（IMG_8747.JPG対応） ---
-  if (imageLoaded) {
-    // スプライトシート全体を10列×9行のグリッドとして正確に1コマ分を計算
-    const colWidth = spriteSheet.width / 10;
-    const rowHeight = spriteSheet.height / 9;
-
-    // 手前プレイヤー（後ろ向きのコマ：例として 2列目・1行目付近）
-    ctx.drawImage(spriteSheet, colWidth * 2, rowHeight * 1, colWidth, rowHeight, player.x - 18, player.y - 26, 36, 36);
-
-    // 奥側CPU（前向きのコマ：例として 0列目・0行目付近）
-    ctx.drawImage(spriteSheet, 0, 0, colWidth, rowHeight, cpu.x - 16, cpu.y - 26, 32, 32);
-  } else {
-    // 画像読込中のフォールバック
-    ctx.fillStyle = '#ff69b4'; ctx.fillRect(player.x - 12, player.y - 18, 24, 28);
-    ctx.fillStyle = '#00fa9a'; ctx.fillRect(cpu.x - 12, cpu.y - 18, 24, 28);
-  }
+  // --- キャラクター描画（コードによる美しいレトロ描画） ---
+  drawRetroCharacter(player.x, player.y, true);
+  drawRetroCharacter(cpu.x, cpu.y, false);
 
   // --- ボールと影 ---
   let shadowY = ball.y + ball.z;
@@ -385,12 +398,15 @@ function draw() {
   ctx.fillStyle = '#ffffe0';
   ctx.beginPath(); ctx.arc(ball.x, ballScreenY, 5, 0, Math.PI*2); ctx.fill();
 
-  // --- 打球エフェクト（IMG_8747.JPG の「右下」のコマを切り出し） ---
-  if (effect.timer > 0 && imageLoaded) {
-    const colWidth = spriteSheet.width / 10;
-    const rowHeight = spriteSheet.height / 9;
-    // スプライトシートの右下（9列目・8行目）のエフェクト部分を切り出し
-    ctx.drawImage(spriteSheet, colWidth * 9, rowHeight * 8, colWidth, rowHeight, effect.x - 16, effect.y - 16, 32, 32);
+  // --- 打球エフェクト（ファミコン風の十字スパークエフェクト） ---
+  if (effect.timer > 0) {
+    ctx.strokeStyle = '#ffcc00';
+    ctx.lineWidth = 3;
+    let size = 16 - effect.timer;
+    ctx.beginPath();
+    ctx.moveTo(effect.x - size, effect.y); ctx.lineTo(effect.x + size, effect.y);
+    ctx.moveTo(effect.x, effect.y - size); ctx.lineTo(effect.x, effect.y + size);
+    ctx.stroke();
   }
 }
 
