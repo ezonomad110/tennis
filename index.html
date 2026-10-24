@@ -93,11 +93,6 @@ window.addEventListener('error', function (e) {
 
     <canvas id="game" width="480" height="560"></canvas>
 
-    <div class="controls">
-      <p><strong>移動:</strong> ←↑↓→ / WASD</p>
-      <p><strong>Aボタン（Z / SPACE）:</strong> トップスピン　<strong>Bボタン（X）:</strong> スライス　<strong>Cボタン（C）:</strong> ロブ</p>
-      <p class="hint">ネット近くでバウンド前に打つとボレー、高い球×Aボタンでスマッシュ。白い◎マークがボールの落下地点です。少し早めにボタンを押しても大丈夫（先行入力対応）。サーブは2ndになると安全なスライスサーブになります。<strong>R:</strong> リスタート</p>
-    </div>
 
     <div class="touch">
       <div id="stick" class="stick" aria-label="仮想スティック"><div id="stickKnob" class="stick-knob"></div></div>
@@ -134,10 +129,10 @@ let selectedChar = CHARACTERS[1];
 
 // ---------- Courts (all original settings, inspired by era conventions) ----------
 const COURTS = {
-  hard:  { name: "HARD",  desc: "屋内ハード。クセがなく平均的。", gravity: 0.40, bounce: 0.55, afterBounce: 0.92, speed: 1.00, inside: "#3a7bd5", inside2: "#356fc0", outside: "#2e7d5b", dust: "#dbeafe" },
-  lawn:  { name: "LAWN",  desc: "芝。バウンドが低く、バウンド後も速い。", gravity: 0.42, bounce: 0.36, afterBounce: 1.00, speed: 1.08, inside: "#3f9e4d", inside2: "#358a42", outside: "#2c7a38", dust: "#dcfce7" },
-  clay:  { name: "CLAY",  desc: "土。バウンド後に大きく減速、ラリーが長くなる。", gravity: 0.38, bounce: 0.60, afterBounce: 0.66, speed: 0.93, inside: "#c46a3a", inside2: "#b45f33", outside: "#6b7f4e", dust: "#f2b183" },
-  cosmo: { name: "COSMO", desc: "宇宙コート。高く弾んで少しフワフワ。", gravity: 0.33, bounce: 0.88, afterBounce: 0.95, speed: 1.00, inside: "#5b4b9e", inside2: "#50428c", outside: "#171233", dust: "#ddd6fe" },
+  hard:  { name: "HARD",  desc: "屋内ハード。クセがなく平均的。", peak: 1.0, bounce: 0.55, afterBounce: 0.92, speed: 1.00, inside: "#3a7bd5", inside2: "#356fc0", outside: "#2e7d5b", dust: "#dbeafe" },
+  lawn:  { name: "LAWN",  desc: "芝。バウンドが低く、バウンド後も速い。", peak: 0.8, bounce: 0.36, afterBounce: 1.00, speed: 1.08, inside: "#3f9e4d", inside2: "#358a42", outside: "#2c7a38", dust: "#dcfce7" },
+  clay:  { name: "CLAY",  desc: "土。バウンド後に大きく減速、ラリーが長くなる。", peak: 1.1, bounce: 0.60, afterBounce: 0.66, speed: 0.93, inside: "#c46a3a", inside2: "#b45f33", outside: "#6b7f4e", dust: "#f2b183" },
+  cosmo: { name: "COSMO", desc: "宇宙コート。高く弾んで少しフワフワ。", peak: 1.6, bounce: 0.88, afterBounce: 0.95, speed: 1.00, inside: "#5b4b9e", inside2: "#50428c", outside: "#171233", dust: "#ddd6fe" },
 };
 let court = COURTS.hard;
 
@@ -175,6 +170,11 @@ function courtEdge(y) {
 function singlesBounds(y) {
   const e = courtEdge(y); const inset = lerp(18, 28, e.t);
   return { left: e.left + inset, right: e.right - inset };
+}
+// Keep every aimed shot inside the (narrower-at-the-far-end) court.
+function clampTargetX(x, y) {
+  const b = singlesBounds(y);
+  return Math.max(b.left + 14, Math.min(b.right - 14, x));
 }
 function inCourt(x, y) {
   if (y < 66 || y > 494) return false;
@@ -264,7 +264,7 @@ let particles = [], floaters = [];
 
 function applyChar() {
   player.color = selectedChar.color; player.cap = selectedChar.cap;
-  player.speed = 4.0 + STAT[selectedChar.footwork] * 0.45;
+  player.speed = 4.6 + STAT[selectedChar.footwork] * 0.5;
 }
 
 let state = "serve", server = "player", faults = 0, cpuServeTimer = 0, pointTimer = 0;
@@ -332,6 +332,8 @@ function doServe(who, shot = "top") {
     if (aimLeft()) tx -= 34;
     if (aimRight()) tx += 34;
     if (safe) tx = mid + (rightBox ? 42 : -42); // safer aim, closer to centre
+    // Never aim a serve outside its own service box.
+    tx = rightBox ? Math.max(mid + 8, Math.min(b.right - 14, tx)) : Math.max(b.left + 14, Math.min(mid - 8, tx));
   } else {
     tx = player.x < 240 ? 295 + Math.random() * 35 : 150 + Math.random() * 35;
   }
@@ -359,16 +361,17 @@ function launchBall(tx, ty, shot, power = 0) {
     case "smash":  speed = 12.6; break;
     default:       speed = 7.4;
   }
-  speed *= court.speed * 0.52; // v4: much slower overall so the player can actually get to the ball
-  if (ball.lastHitter === "cpu") speed *= 0.9; // CPU returns are a touch gentler
+  speed *= court.speed * 0.40; // v5: slower again (about 1/3 of v1), combined with delta-time normalisation
+  if (ball.lastHitter === "cpu") speed *= 0.85; // CPU returns are gentler still
   const duration = Math.max(20, dist / speed);
   ball.vx = dx / duration; ball.vy = dy / duration;
-  // Spin changes gravity: topspin dips, slice floats, lob sails.
-  ball.gravity = shot === "top" || shot === "smash" ? court.gravity + 0.14
-               : shot === "slice" ? court.gravity - 0.07
-               : shot === "lob" ? court.gravity - 0.05
-               : court.gravity;
-  ball.vz = 0.5 * ball.gravity * duration * (shot === "lob" ? 1.25 : shot === "slice" || shot === "volley" || shot === "smash" ? 0.78 : 1);
+  // Arc height is FIXED per shot type (peak height in px), independent of speed.
+  // Slowing the ball down must not make the arc taller: gravity and vz are
+  // derived from the desired peak, so topspin stays low and only the lob goes high.
+  const PEAKS = { flat: 24, top: 30, slice: 20, lob: 95, volley: 16, smash: 12 };
+  const peak = (PEAKS[shot] || 24) * court.peak;
+  ball.gravity = 8 * peak / (duration * duration);
+  ball.vz = 4 * peak / duration - ball.z / duration; // lands at the target; negative (downward) for smashes from high balls
   ball.spin = shot; ball.bounces = 0;
   // Predict the first bounce so the player can see where the ball will land.
   {
@@ -407,6 +410,7 @@ function tryHit(p, who, shot) {
   if (left) targetX = singlesBounds(targetY).left + 22;
   else if (right) targetX = singlesBounds(targetY).right - 22;
   else targetX = opp.x < 240 ? 325 + Math.random() * 55 : 100 + Math.random() * 55;
+  targetX = clampTargetX(targetX, targetY);
 
   if (isPlayer) {
     power = type === "volley" ? STAT[selectedChar.volley] : STAT[selectedChar.stroke];
@@ -461,6 +465,9 @@ function handleBounce() {
 }
 
 // ---------- Update ----------
+// DT normalises game speed to 60fps units, so 120Hz phone screens
+// no longer run the whole game at double speed in real time.
+let DT = 1, lastFrameTime = 0;
 function cpuChooseShot() {
   if (ball.z > 38 && Math.random() < 0.6) return "top"; // becomes smash
   const r = Math.random();
@@ -473,18 +480,18 @@ function update() {
   if (keys.ArrowUp || keys.KeyW) my -= 1;
   if (keys.ArrowDown || keys.KeyS) my += 1;
   if (stick.active) { mx = stick.x; my = stick.y; } // analog: tilt = speed & direction
-  player.moving = !!(mx || my); if (player.moving) player.anim++;
-  player.x = Math.max(18, Math.min(W - 18, player.x + mx * player.speed));
-  player.y = Math.max(NET_Y + 22, Math.min(512, player.y + my * player.speed));
-  if (player.swing > 0) player.swing--;
-  if (player.swingBuffer > 0) player.swingBuffer--;
-  if (cpu.swing > 0) cpu.swing--;
-  particles = particles.filter(pt => (pt.life-- > 0) && (pt.x += pt.vx, pt.y += pt.vy, true));
-  floaters = floaters.filter(f => (f.life-- > 0) && (f.y -= 0.5, true));
+  player.moving = !!(mx || my); if (player.moving) player.anim += DT;
+  player.x = Math.max(18, Math.min(W - 18, player.x + mx * player.speed * DT));
+  player.y = Math.max(NET_Y + 22, Math.min(512, player.y + my * player.speed * DT));
+  if (player.swing > 0) player.swing -= DT;
+  if (player.swingBuffer > 0) player.swingBuffer -= DT;
+  if (cpu.swing > 0) cpu.swing -= DT;
+  particles = particles.filter(pt => (pt.life -= DT) > 0 && (pt.x += pt.vx * DT, pt.y += pt.vy * DT, true));
+  floaters = floaters.filter(f => (f.life -= DT) > 0 && (f.y -= 0.5 * DT, true));
 
   if (state === "serve") {
     if (server === "player") { ball.x = player.x + 10; ball.y = player.y - 6; }
-    else { cpuServeTimer--; ball.x = cpu.x - 10; ball.y = cpu.y + 6; if (cpuServeTimer <= 0) doServe("cpu", Math.random() < 0.3 ? "slice" : "top"); }
+    else { cpuServeTimer -= DT; ball.x = cpu.x - 10; ball.y = cpu.y + 6; if (cpuServeTimer <= 0) doServe("cpu", Math.random() < 0.3 ? "slice" : "top"); }
   }
 
   if (state === "rally" && !ball.dead) {
@@ -493,21 +500,21 @@ function update() {
     if (ball.vy < 0 || ball.y < NET_Y) {
       const dx = ball.x - cpu.x, dy = Math.max(78, ball.y - 8) - cpu.y;
       const dd = Math.hypot(dx, dy) || 1;
-      cpu.moving = dd > 6; if (cpu.moving) cpu.anim++;
-      if (cpu.moving) { cpu.x += dx / dd * cpu.speed; cpu.y += dy / dd * cpu.speed; }
+      cpu.moving = dd > 6; if (cpu.moving) cpu.anim += DT;
+      if (cpu.moving) { cpu.x += dx / dd * cpu.speed * DT; cpu.y += dy / dd * cpu.speed * DT; }
       cpu.y = Math.max(58, Math.min(NET_Y - 22, cpu.y)); cpu.x = Math.max(18, Math.min(W - 18, cpu.x));
       if (dd < 42 && ball.z < 52 && ball.lastHitter !== "cpu") {
         cpu.swing = 10;
         if (!(dd > 30 && Math.random() < 0.35)) tryHit(cpu, "cpu", cpuChooseShot());
       }
-    } else { cpu.moving = false; cpu.x += (240 - cpu.x) * 0.03; cpu.y += (118 - cpu.y) * 0.03; }
+    } else { cpu.moving = false; cpu.x += (240 - cpu.x) * 0.03 * DT; cpu.y += (118 - cpu.y) * 0.03 * DT; }
 
     ball.trail.push({ x: ball.x, y: ball.y - ball.z });
     if (ball.trail.length > 7) ball.trail.shift();
-    ball.x += ball.vx; ball.y += ball.vy;
-    ball.z += ball.vz; ball.vz -= ball.gravity;
+    ball.x += ball.vx * DT; ball.y += ball.vy * DT;
+    ball.z += ball.vz * DT; ball.vz -= ball.gravity * DT;
 
-    const prevY = ball.y - ball.vy;
+    const prevY = ball.y - ball.vy * DT;
     if ((prevY - NET_Y) * (ball.y - NET_Y) < 0 && ball.z < 15) {
       awardPoint(ball.lastHitter === "player" ? "cpu" : "player", "ネット…");
     }
@@ -516,8 +523,11 @@ function update() {
       const vzIn = Math.abs(ball.vz);
       handleBounce();
       if (!ball.dead) {
-        ball.vz = vzIn * court.bounce * (ball.spin === "slice" && court === COURTS.lawn ? 0.7 : 1);
-        ball.vx *= court.afterBounce; ball.vy *= court.afterBounce;
+        // Post-bounce arc is also capped: a modest hop the receiver can actually hit,
+        // instead of inheriting the (possibly huge) incoming vertical speed.
+        ball.gravity = court === COURTS.cosmo ? 0.13 : 0.16;
+        ball.vz = Math.min(3.4, 4.4 * court.bounce * (ball.spin === "slice" && court === COURTS.lawn ? 0.7 : 1));
+        ball.vx *= court.afterBounce * 0.9; ball.vy *= court.afterBounce * 0.9; // slower after the bounce = more time to react
       }
     }
     if (ball.y < -40 || ball.y > H + 40 || ball.x < -40 || ball.x > W + 40) {
@@ -525,7 +535,7 @@ function update() {
     }
   }
 
-  if (state === "pointEnd") { pointTimer--; if (pointTimer <= 0) { pendingSecondServe ? secondServe() : startServe(); } }
+  if (state === "pointEnd") { pointTimer -= DT; if (pointTimer <= 0) { pendingSecondServe ? secondServe() : startServe(); } }
 }
 
 // ---------- Draw ----------
@@ -608,8 +618,10 @@ function drawLandingMarker() {
   ctx.moveTo(ball.landX - 5, ball.landY - 3); ctx.lineTo(ball.landX + 5, ball.landY + 3);
   ctx.moveTo(ball.landX + 5, ball.landY - 3); ctx.lineTo(ball.landX - 5, ball.landY + 3); ctx.stroke();
 }
-function frame() {
+function frame(timestamp) {
   frameCount++;
+  if (timestamp && lastFrameTime) DT = Math.min(2.5, Math.max(0.2, (timestamp - lastFrameTime) / 16.667));
+  if (timestamp) lastFrameTime = timestamp;
   update(); drawCourt(); drawLandingMarker();
   particles.forEach(pt => { ctx.fillStyle = pt.color; ctx.fillRect(pt.x, pt.y, 3, 3); });
   drawCharacter(cpu, false);
