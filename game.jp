@@ -1,0 +1,464 @@
+// Retro Tennis v2 — original homage to Famicom-era tennis games.
+// Hallmarks recreated as original mechanics: stat-rated players (A/B/C),
+// 4 court surfaces with different bounces, spin shots (topspin/slice/lob),
+// volleys & smashes, chibi 3-head-tall pixel players.
+// No assets, code, music, names or characters from any commercial game are used.
+"use strict";
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const W = canvas.width, H = canvas.height;
+const NET_Y = 280;
+const WIN_GAMES = 3;
+
+// ---------- Characters (all original) ----------
+const STAT = { A: 3, B: 2, C: 1 };
+const CHARACTERS = [
+  { id: "gou",   name: "ゴウ",   serve: "A", stroke: "A", volley: "C", footwork: "B", racket: 0,  color: "#dc2626", cap: "#7f1d1d", desc: "パワー型。サーブとストロークが強烈、ボレーは苦手。" },
+  { id: "ken",   name: "ケン",   serve: "B", stroke: "B", volley: "B", footwork: "B", racket: 0,  color: "#2563eb", cap: "#1e3a8a", desc: "バランス型。穴がなく扱いやすい。" },
+  { id: "saki",  name: "サキ",   serve: "C", stroke: "B", volley: "B", footwork: "B", racket: 10, color: "#db2777", cap: "#831843", desc: "大きなラケットで当たりやすい、初心者向け。サーブは控えめ。" },
+  { id: "hayato",name: "ハヤト", serve: "C", stroke: "B", volley: "A", footwork: "A", racket: 0,  color: "#16a34a", cap: "#14532d", desc: "俊足＋ボレーの達人。ネットプレーで攻める。" },
+];
+let selectedChar = CHARACTERS[1];
+
+// ---------- Courts (all original settings, inspired by era conventions) ----------
+const COURTS = {
+  hard:  { name: "HARD",  desc: "屋内ハード。クセがなく平均的。", gravity: 0.40, bounce: 0.55, afterBounce: 0.92, speed: 1.00, inside: "#3a7bd5", inside2: "#356fc0", outside: "#2e7d5b", dust: "#dbeafe" },
+  lawn:  { name: "LAWN",  desc: "芝。バウンドが低く、バウンド後も速い。", gravity: 0.42, bounce: 0.36, afterBounce: 1.00, speed: 1.08, inside: "#3f9e4d", inside2: "#358a42", outside: "#2c7a38", dust: "#dcfce7" },
+  clay:  { name: "CLAY",  desc: "土。バウンド後に大きく減速、ラリーが長くなる。", gravity: 0.38, bounce: 0.60, afterBounce: 0.66, speed: 0.93, inside: "#c46a3a", inside2: "#b45f33", outside: "#6b7f4e", dust: "#f2b183" },
+  cosmo: { name: "COSMO", desc: "宇宙コート。高く弾んで少しフワフワ。", gravity: 0.33, bounce: 0.88, afterBounce: 0.95, speed: 1.00, inside: "#5b4b9e", inside2: "#50428c", outside: "#171233", dust: "#ddd6fe" },
+};
+let court = COURTS.hard;
+
+// ---------- Selection UI ----------
+function buildSelect(elId, items, getLabel, onPick, initialIdx) {
+  const el = document.getElementById(elId);
+  items.forEach((item, i) => {
+    const b = document.createElement("button");
+    b.textContent = getLabel(item);
+    if (i === initialIdx) b.classList.add("active");
+    b.addEventListener("click", () => {
+      el.querySelectorAll("button").forEach(x => x.classList.remove("active"));
+      b.classList.add("active"); onPick(item);
+    });
+    el.appendChild(b);
+  });
+}
+function refreshInfo() {
+  const c = selectedChar;
+  document.getElementById("charInfo").textContent =
+    `${c.name}：サーブ${c.serve} / ストローク${c.stroke} / ボレー${c.volley} / フットワーク${c.footwork}${c.racket ? " / 大きなラケット" : ""} — ${c.desc}`;
+  document.getElementById("courtInfo").textContent = `${court.name} — ${court.desc}`;
+  document.getElementById("playerName").textContent = c.name;
+}
+buildSelect("charSelect", CHARACTERS, c => c.name, c => { selectedChar = c; applyChar(); refreshInfo(); }, 1);
+buildSelect("courtSelect", Object.values(COURTS), c => c.name, c => { court = c; refreshInfo(); }, 0);
+document.getElementById("btnApply").addEventListener("click", () => { applyChar(); resetMatch(); });
+
+// ---------- Court geometry ----------
+function lerp(a, b, t) { return a + (b - a) * t; }
+function courtEdge(y) {
+  const t = Math.max(0, Math.min(1, (y - 70) / (490 - 70)));
+  return { left: lerp(110, 40, t), right: lerp(370, 440, t), t };
+}
+function singlesBounds(y) {
+  const e = courtEdge(y); const inset = lerp(18, 28, e.t);
+  return { left: e.left + inset, right: e.right - inset };
+}
+function inCourt(x, y) {
+  if (y < 66 || y > 494) return false;
+  const b = singlesBounds(y);
+  return x >= b.left - 4 && x <= b.right + 4;
+}
+function inServiceBox(x, y, forPlayerServe) {
+  if (forPlayerServe) { if (y > NET_Y || y < 115) return false; }
+  else { if (y < NET_Y || y > 445) return false; }
+  const b = singlesBounds(y); const mid = (b.left + b.right) / 2;
+  const deuceRight = (rawPoints[0] + rawPoints[1]) % 2 === 0;
+  if (forPlayerServe) return deuceRight ? (x >= mid - 4 && x <= b.right + 4) : (x >= b.left - 4 && x <= mid + 4);
+  return deuceRight ? (x >= b.left - 4 && x <= mid + 4) : (x >= mid - 4 && x <= b.right + 4);
+}
+
+// ---------- Audio (original square-wave jingles) ----------
+let audioCtx = null;
+function beep(freq, dur = 0.06, vol = 0.05, delay = 0) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime + delay;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = "square"; o.frequency.value = freq; g.gain.value = vol;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t0); o.stop(t0 + dur);
+  } catch (e) {}
+}
+function jingle(win) {
+  const notes = win ? [523, 659, 784, 1046] : [392, 330, 262, 196];
+  notes.forEach((n, i) => beep(n, 0.11, 0.05, i * 0.11));
+}
+
+// ---------- Input: A=topspin, B=slice, C=lob (Famicom-style buttons) ----------
+const keys = {};
+let queuedShot = "top";
+addEventListener("keydown", (e) => {
+  if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space"].includes(e.code)) e.preventDefault();
+  if (keys[e.code]) return; keys[e.code] = true;
+  if (e.code === "Space" || e.code === "KeyZ") onSwing("top");
+  if (e.code === "KeyX") onSwing("slice");
+  if (e.code === "KeyC") onSwing("lob");
+  if (e.code === "KeyR") { applyChar(); resetMatch(); }
+});
+addEventListener("keyup", (e) => { keys[e.code] = false; });
+function bindBtn(id, fn) {
+  const el = document.getElementById(id); if (!el) return;
+  el.addEventListener("touchstart", (e) => { e.preventDefault(); fn(); });
+  el.addEventListener("mousedown", (e) => { e.preventDefault(); fn(); });
+}
+function bindHold(id, code) {
+  const el = document.getElementById(id); if (!el) return;
+  const on = (e) => { e.preventDefault(); keys[code] = true; };
+  const off = (e) => { e.preventDefault(); keys[code] = false; };
+  el.addEventListener("touchstart", on); el.addEventListener("touchend", off);
+  el.addEventListener("mousedown", on); el.addEventListener("mouseup", off);
+}
+bindHold("btnLeft","ArrowLeft"); bindHold("btnRight","ArrowRight");
+bindHold("btnUp","ArrowUp"); bindHold("btnDown","ArrowDown");
+bindBtn("btnTop", () => onSwing("top")); bindBtn("btnSlice", () => onSwing("slice")); bindBtn("btnLob", () => onSwing("lob"));
+
+// ---------- Entities ----------
+const player = { x: 240, y: 440, speed: 3.8, swing: 0, moving: false, anim: 0, color: "#2563eb", cap: "#1e3a8a" };
+const cpu    = { x: 240, y: 120, speed: 2.75, swing: 0, moving: false, anim: 0, color: "#f59e0b", cap: "#78350f" };
+const ball   = { x: 240, y: 430, vx: 0, vy: 0, z: 6, vz: 0, bounces: 0, lastHitter: null, serveFlight: false, dead: true, spin: "flat", gravity: 0.4, trail: [] };
+let particles = [], floaters = [];
+
+function applyChar() {
+  player.color = selectedChar.color; player.cap = selectedChar.cap;
+  player.speed = 3.05 + STAT[selectedChar.footwork] * 0.38;
+}
+
+let state = "serve", server = "player", faults = 0, cpuServeTimer = 0, pointTimer = 0;
+let pendingSecondServe = false;
+let rawPoints = [0, 0], games = [0, 0];
+const pointNames = ["0", "15", "30", "40"];
+const msgEl = document.getElementById("message");
+function setMessage(t) { msgEl.textContent = t; }
+function displayPoints(i) {
+  const [p, c] = rawPoints;
+  if (p >= 3 && c >= 3) { if (p === c) return "40"; return (i === 0 ? p > c : c > p) ? "AD" : "40"; }
+  return pointNames[rawPoints[i]];
+}
+function updateScoreboard() {
+  document.getElementById("playerGames").textContent = games[0];
+  document.getElementById("cpuGames").textContent = games[1];
+  document.getElementById("playerPoints").textContent = displayPoints(0);
+  document.getElementById("cpuPoints").textContent = displayPoints(1);
+}
+function floater(text, x, y, color = "#ffd166") { floaters.push({ text, x, y, life: 55, color }); }
+
+// ---------- Flow ----------
+function resetPositions() {
+  player.x = server === "player" ? 210 : 240; player.y = 445;
+  cpu.x = server === "cpu" ? 270 : 240; cpu.y = 115;
+  ball.vx = ball.vy = ball.vz = 0; ball.bounces = 0; ball.dead = true;
+  ball.lastHitter = null; ball.serveFlight = false; ball.trail = [];
+  if (server === "player") { ball.x = player.x + 10; ball.y = player.y - 6; ball.z = 8; }
+  else { ball.x = cpu.x - 10; ball.y = cpu.y + 6; ball.z = 8; }
+}
+function resetMatch() {
+  rawPoints = [0, 0]; games = [0, 0]; server = "player"; faults = 0; pendingSecondServe = false;
+  state = "serve"; resetPositions(); updateScoreboard();
+  setMessage(`${selectedChar.name}で ${court.name} コート — SPACE/Aボタンでサーブ！`);
+}
+function startServe() {
+  state = "serve"; faults = 0; pendingSecondServe = false; resetPositions();
+  setMessage(server === "player" ? "サーブ — Aボタン: 速いサーブ / Bボタン: 安全なスライスサーブ" : "CPU のサーブ…");
+  cpuServeTimer = 70; updateScoreboard();
+}
+function secondServe() {
+  pendingSecondServe = false; state = "serve"; resetPositions();
+  cpuServeTimer = 65;
+  setMessage(server === "player" ? "セカンドサーブ — 外すと失点、慎重に" : "CPU セカンドサーブ…");
+}
+function onSwing(shot) {
+  queuedShot = shot;
+  if (state === "serve" && server === "player") { doServe("player", shot); return; }
+  if (state !== "rally") return;
+  player.swing = 10; tryHit(player, "player", shot);
+}
+function doServe(who, shot = "top") {
+  const isPlayer = who === "player";
+  const from = isPlayer ? player : cpu; from.swing = 10;
+  const second = faults >= 1;
+  // 2nd serve (or B button) = slice serve: slower but safer arc.
+  const safe = second || shot === "slice";
+  let tx;
+  if (isPlayer) {
+    const b = singlesBounds(190), mid = (b.left + b.right) / 2;
+    const rightBox = (rawPoints[0] + rawPoints[1]) % 2 === 0;
+    tx = mid + (rightBox ? 52 : -52);
+    if (keys.ArrowLeft || keys.KeyA) tx -= 34;
+    if (keys.ArrowRight || keys.KeyD) tx += 34;
+    if (safe) tx = mid + (rightBox ? 42 : -42); // safer aim, closer to centre
+  } else {
+    tx = player.x < 240 ? 295 + Math.random() * 35 : 150 + Math.random() * 35;
+  }
+  const ty = isPlayer ? 178 + Math.random() * 40 : 382 + Math.random() * 40;
+  ball.x = from.x; ball.y = from.y; ball.z = 10; ball.dead = false;
+  ball.lastHitter = who; ball.serveFlight = true;
+  const serveStat = isPlayer ? STAT[selectedChar.serve] : 2;
+  const power = safe ? 0 : serveStat;
+  launchBall(tx, ty, safe ? "slice" : "flat", power);
+  state = "rally"; beep(isPlayer ? 260 : 220);
+  const kmh = Math.round(118 + serveStat * 16 + (safe ? -28 : Math.random() * 10));
+  if (!safe) floater(kmh + " km/h!", from.x, from.y - 34, "#fff");
+  setMessage(second ? "" : "");
+}
+function launchBall(tx, ty, shot, power = 0) {
+  const dx = tx - ball.x, dy = ty - ball.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  let speed;
+  switch (shot) {
+    case "flat":   speed = 10.2 + power * 0.7; break;
+    case "top":    speed = 8.2 + power * 0.5; break;
+    case "slice":  speed = 6.6 + power * 0.3; break;
+    case "lob":    speed = 5.9; break;
+    case "volley": speed = 9.6 + power * 0.5; break;
+    case "smash":  speed = 12.6; break;
+    default:       speed = 7.4;
+  }
+  speed *= court.speed;
+  const duration = Math.max(20, dist / speed);
+  ball.vx = dx / duration; ball.vy = dy / duration;
+  // Spin changes gravity: topspin dips, slice floats, lob sails.
+  ball.gravity = shot === "top" || shot === "smash" ? court.gravity + 0.14
+               : shot === "slice" ? court.gravity - 0.07
+               : shot === "lob" ? court.gravity - 0.05
+               : court.gravity;
+  ball.vz = 0.5 * ball.gravity * duration * (shot === "lob" ? 1.25 : shot === "slice" || shot === "volley" || shot === "smash" ? 0.78 : 1);
+  ball.spin = shot; ball.bounces = 0;
+}
+function tryHit(p, who, shot) {
+  if (ball.dead || ball.lastHitter === who) return;
+  const isPlayer = who === "player";
+  const d = Math.hypot(ball.x - p.x, ball.y - p.y);
+  const range = 46 + (isPlayer ? selectedChar.racket : 0);
+  const toward = isPlayer ? ball.vy > -1.2 : ball.vy < 1.2;
+  if (d > range || ball.z > 62 || !toward) return;
+
+  // Shot identity: high ball + topspin near the net = smash; no bounce + close to net = volley.
+  let type = shot;
+  const nearNet = isPlayer ? p.y < 372 : p.y > 188;
+  if (ball.bounces === 0 && ball.z > 36 && shot === "top") type = "smash";
+  else if (ball.bounces === 0 && nearNet) type = shot === "lob" ? "lob" : "volley";
+
+  const opp = isPlayer ? cpu : player;
+  let targetY, power = 0;
+  if (type === "smash") { targetY = isPlayer ? 88 + Math.random() * 40 : 462 + Math.random() * 22; }
+  else if (type === "lob") { targetY = isPlayer ? 82 + Math.random() * 26 : 470 + Math.random() * 16; }
+  else if (type === "slice") { targetY = isPlayer ? 120 + Math.random() * 70 : 420 + Math.random() * 55; }
+  else { targetY = isPlayer ? 95 + Math.random() * 55 : 450 + Math.random() * 32; }
+
+  let targetX;
+  const left = isPlayer && (keys.ArrowLeft || keys.KeyA);
+  const right = isPlayer && (keys.ArrowRight || keys.KeyD);
+  if (left) targetX = singlesBounds(targetY).left + 22;
+  else if (right) targetX = singlesBounds(targetY).right - 22;
+  else targetX = opp.x < 240 ? 325 + Math.random() * 55 : 100 + Math.random() * 55;
+
+  if (isPlayer) {
+    power = type === "volley" ? STAT[selectedChar.volley] : STAT[selectedChar.stroke];
+    if (type === "smash") floater("SMASH!", p.x, p.y - 36, "#ff5964");
+    else if (type === "volley") floater("VOLLEY!", p.x, p.y - 36, "#8ecae6");
+    else if (type === "top" && d < 26 && ball.z > 4 && ball.z < 30) { power += 1.5; floater("TOPSPIN!", p.x, p.y - 36); }
+  }
+  ball.lastHitter = who; ball.serveFlight = false;
+  launchBall(targetX, targetY, type, power);
+  beep(type === "smash" ? 460 : type === "slice" ? 200 : 300);
+}
+function awardPoint(winner, reason) {
+  if (state !== "rally" && state !== "serve") return;
+  state = "pointEnd"; pointTimer = 80; ball.dead = true;
+  rawPoints[winner === "player" ? 0 : 1]++;
+  jingle(winner === "player");
+  setMessage(reason + (winner === "player" ? " あなたのポイント！" : " CPUのポイント"));
+  const [p, c] = rawPoints;
+  if ((p >= 4 || c >= 4) && Math.abs(p - c) >= 2) {
+    const gw = p > c ? 0 : 1;
+    games[gw]++; rawPoints = [0, 0];
+    server = server === "player" ? "cpu" : "player";
+    if (games[gw] >= WIN_GAMES) {
+      setMessage((gw === 0 ? "🏆 ゲームセット！あなたの勝ち！" : "ゲームセット。CPUの勝ち…") + " Rで再戦");
+      state = "matchEnd"; updateScoreboard(); return;
+    }
+    setMessage((gw === 0 ? "ゲーム！あなたが取りました" : "ゲーム。CPUが取りました") + " — サーブ交代");
+  }
+  updateScoreboard();
+}
+function handleBounce() {
+  const side = ball.y < NET_Y ? "cpu" : "player";
+  if (ball.bounces === 1) {
+    // Dust puff in the court's colour.
+    for (let i = 0; i < 6; i++) particles.push({ x: ball.x + (Math.random() - .5) * 12, y: ball.y, vx: (Math.random() - .5) * 1.4, vy: -Math.random() * 1.2, life: 18, color: court.dust });
+    if (ball.serveFlight) {
+      if (!inServiceBox(ball.x, ball.y, ball.lastHitter === "player")) {
+        if (faults >= 1) { awardPoint(ball.lastHitter === "player" ? "cpu" : "player", "ダブルフォルト…"); }
+        else {
+          faults = 1; pendingSecondServe = true; state = "pointEnd"; pointTimer = 60; ball.dead = true;
+          setMessage("フォルト！ セカンドサーブへ");
+        }
+        return;
+      }
+      ball.serveFlight = false;
+    } else if (!inCourt(ball.x, ball.y)) {
+      awardPoint(ball.lastHitter === "player" ? "cpu" : "player", "アウト！");
+      return;
+    }
+  }
+  if (ball.bounces >= 2) awardPoint(side === "player" ? "cpu" : "player", "ツーバウンド！");
+}
+
+// ---------- Update ----------
+function cpuChooseShot() {
+  if (ball.z > 38 && Math.random() < 0.6) return "top"; // becomes smash
+  const r = Math.random();
+  return r < 0.55 ? "top" : r < 0.85 ? "slice" : "lob";
+}
+function update() {
+  let mx = 0, my = 0;
+  if (keys.ArrowLeft || keys.KeyA) mx -= 1;
+  if (keys.ArrowRight || keys.KeyD) mx += 1;
+  if (keys.ArrowUp || keys.KeyW) my -= 1;
+  if (keys.ArrowDown || keys.KeyS) my += 1;
+  player.moving = !!(mx || my); if (player.moving) player.anim++;
+  player.x = Math.max(18, Math.min(W - 18, player.x + mx * player.speed));
+  player.y = Math.max(NET_Y + 22, Math.min(512, player.y + my * player.speed));
+  if (player.swing > 0) player.swing--;
+  if (cpu.swing > 0) cpu.swing--;
+  particles = particles.filter(pt => (pt.life-- > 0) && (pt.x += pt.vx, pt.y += pt.vy, true));
+  floaters = floaters.filter(f => (f.life-- > 0) && (f.y -= 0.5, true));
+
+  if (state === "serve") {
+    if (server === "player") { ball.x = player.x + 10; ball.y = player.y - 6; }
+    else { cpuServeTimer--; ball.x = cpu.x - 10; ball.y = cpu.y + 6; if (cpuServeTimer <= 0) doServe("cpu", Math.random() < 0.3 ? "slice" : "top"); }
+  }
+
+  if (state === "rally" && !ball.dead) {
+    if (ball.vy < 0 || ball.y < NET_Y) {
+      const dx = ball.x - cpu.x, dy = Math.max(78, ball.y - 8) - cpu.y;
+      const dd = Math.hypot(dx, dy) || 1;
+      cpu.moving = dd > 6; if (cpu.moving) cpu.anim++;
+      if (cpu.moving) { cpu.x += dx / dd * cpu.speed; cpu.y += dy / dd * cpu.speed; }
+      cpu.y = Math.max(58, Math.min(NET_Y - 22, cpu.y)); cpu.x = Math.max(18, Math.min(W - 18, cpu.x));
+      if (dd < 42 && ball.z < 52 && ball.lastHitter !== "cpu") {
+        cpu.swing = 10;
+        if (!(dd > 30 && Math.random() < 0.35)) tryHit(cpu, "cpu", cpuChooseShot());
+      }
+    } else { cpu.moving = false; cpu.x += (240 - cpu.x) * 0.03; cpu.y += (118 - cpu.y) * 0.03; }
+
+    ball.trail.push({ x: ball.x, y: ball.y - ball.z });
+    if (ball.trail.length > 7) ball.trail.shift();
+    ball.x += ball.vx; ball.y += ball.vy;
+    ball.z += ball.vz; ball.vz -= ball.gravity;
+
+    const prevY = ball.y - ball.vy;
+    if ((prevY - NET_Y) * (ball.y - NET_Y) < 0 && ball.z < 15) {
+      awardPoint(ball.lastHitter === "player" ? "cpu" : "player", "ネット…");
+    }
+    if (ball.z <= 0 && ball.vz < 0) {
+      ball.z = 0; ball.bounces++; beep(140, 0.04, 0.04);
+      const vzIn = Math.abs(ball.vz);
+      handleBounce();
+      if (!ball.dead) {
+        ball.vz = vzIn * court.bounce * (ball.spin === "slice" && court === COURTS.lawn ? 0.7 : 1);
+        ball.vx *= court.afterBounce; ball.vy *= court.afterBounce;
+      }
+    }
+    if (ball.y < -40 || ball.y > H + 40 || ball.x < -40 || ball.x > W + 40) {
+      awardPoint(ball.lastHitter === "player" ? "cpu" : "player", "アウト！");
+    }
+  }
+
+  if (state === "pointEnd") { pointTimer--; if (pointTimer <= 0) { pendingSecondServe ? secondServe() : startServe(); } }
+}
+
+// ---------- Draw ----------
+const stars = Array.from({ length: 70 }, (_, i) => ({ x: (i * 67) % W, y: (i * 41) % H, s: i % 3 + 1 }));
+function drawCourt() {
+  ctx.fillStyle = court.outside; ctx.fillRect(0, 0, W, H);
+  if (court === COURTS.cosmo) { ctx.fillStyle = "#fff"; stars.forEach(s => ctx.fillRect(s.x, s.y, s.s, s.s)); }
+  const tl = courtEdge(70), bl = courtEdge(490);
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(tl.left - 26, 70); ctx.lineTo(tl.right + 26, 70);
+  ctx.lineTo(bl.right + 26, 490); ctx.lineTo(bl.left - 26, 490); ctx.closePath();
+  ctx.fillStyle = court.inside; ctx.fill(); ctx.clip();
+  if (court === COURTS.lawn) { // mowing stripes
+    ctx.fillStyle = court.inside2;
+    for (let y = 70; y < 490; y += 84) ctx.fillRect(0, y, W, 42);
+  }
+  ctx.restore();
+  ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(tl.left, 70); ctx.lineTo(tl.right, 70); ctx.lineTo(bl.right, 490); ctx.lineTo(bl.left, 490); ctx.closePath(); ctx.stroke();
+  const st = singlesBounds(70), sb = singlesBounds(490);
+  ctx.beginPath();
+  ctx.moveTo(st.left, 70); ctx.lineTo(sb.left, 490);
+  ctx.moveTo(st.right, 70); ctx.lineTo(sb.right, 490); ctx.stroke();
+  const s1 = courtEdge(175), s2 = courtEdge(385);
+  ctx.beginPath();
+  ctx.moveTo(s1.left + 18, 175); ctx.lineTo(s1.right - 18, 175);
+  ctx.moveTo(s2.left + 24, 385); ctx.lineTo(s2.right - 24, 385);
+  ctx.moveTo(240, 175); ctx.lineTo(240, 385); ctx.stroke();
+  ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect(28, NET_Y - 4, W - 56, 10);
+  ctx.fillStyle = "#fff"; ctx.fillRect(28, NET_Y - 6, W - 56, 4);
+}
+// Chibi 3-head-tall pixel player, drawn from rectangles only.
+function drawCharacter(p, isPlayer) {
+  const s = (isPlayer ? 1.18 : 0.82); // size in px units
+  const u = s * 2; // pixel unit
+  const x = p.x, y = p.y;
+  ctx.fillStyle = "rgba(0,0,0,.25)";
+  ctx.beginPath(); ctx.ellipse(x, y + 9 * u, 7 * u, 2.4 * u, 0, 0, Math.PI * 2); ctx.fill();
+  const run = p.moving ? Math.floor(p.anim / 5) % 2 : 0;
+  ctx.fillStyle = "#f8fafc"; // shorts / socks block
+  ctx.fillRect(x - 3 * u, y + 2 * u, 6 * u, 3 * u);
+  ctx.fillStyle = "#8d5524"; // legs, alternate while running
+  ctx.fillRect(x - 3 * u + (run ? u : 0), y + 5 * u, 2 * u, 4 * u);
+  ctx.fillRect(x + u - (run ? u : 0), y + 5 * u, 2 * u, 4 * u);
+  ctx.fillStyle = p.color; // shirt
+  ctx.fillRect(x - 4 * u, y - 4 * u, 8 * u, 6 * u);
+  ctx.fillStyle = "#ffd9b3"; // big head (3-head-tall proportion)
+  ctx.fillRect(x - 3.5 * u, y - 11 * u, 7 * u, 7 * u);
+  ctx.fillStyle = p.cap; // cap
+  ctx.fillRect(x - 3.5 * u, y - 11 * u, 7 * u, 2.2 * u);
+  ctx.fillRect(x + (isPlayer ? 1 : -8) * 0 + (isPlayer ? 2.5 * u : -5.5 * u), y - 9.4 * u, 3 * u, 1.2 * u);
+  // racket, swung up while swinging
+  const swingLift = p.swing > 0 ? -5 * u : 0;
+  const rx = x + 6 * u, ry = y - 3 * u + swingLift;
+  ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = Math.max(2, u * 0.7);
+  ctx.beginPath(); ctx.moveTo(x + 3.5 * u, y - u); ctx.lineTo(rx, ry); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(rx, ry - 2.5 * u, 2.6 * u, 3.6 * u, 0, 0, Math.PI * 2); ctx.stroke();
+}
+function drawBall() {
+  const scale = 0.65 + (ball.y / H) * 0.6;
+  ball.trail.forEach((t, i) => {
+    ctx.fillStyle = `rgba(255,255,255,${0.05 + i * 0.02})`;
+    ctx.beginPath(); ctx.arc(t.x, t.y, 4 * scale, 0, Math.PI * 2); ctx.fill();
+  });
+  ctx.fillStyle = "rgba(0,0,0,.3)";
+  ctx.beginPath(); ctx.ellipse(ball.x, ball.y + 4, 7 * scale, 3 * scale, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = ball.spin === "slice" ? "#f8fafc" : ball.spin === "lob" ? "#fdba74" : "#d9f99d";
+  ctx.beginPath(); ctx.arc(ball.x, ball.y - ball.z, 6 * scale + ball.z * 0.04, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke();
+}
+function frame() {
+  update(); drawCourt();
+  particles.forEach(pt => { ctx.fillStyle = pt.color; ctx.fillRect(pt.x, pt.y, 3, 3); });
+  drawCharacter(cpu, false);
+  drawCharacter(player, true);
+  if (state !== "matchEnd") drawBall();
+  ctx.font = "bold 15px monospace"; ctx.textAlign = "center";
+  floaters.forEach(f => { ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y); });
+  requestAnimationFrame(frame);
+}
+
+applyChar(); refreshInfo(); resetMatch(); frame();
