@@ -96,7 +96,7 @@ window.addEventListener('error', function (e) {
     <div class="controls">
       <p><strong>移動:</strong> ←↑↓→ / WASD</p>
       <p><strong>Aボタン（Z / SPACE）:</strong> トップスピン　<strong>Bボタン（X）:</strong> スライス　<strong>Cボタン（C）:</strong> ロブ</p>
-      <p class="hint">ネット近くでバウンド前に打つとボレー、高い球×Aボタンでスマッシュ。サーブは2ndになると安全なスライスサーブになります。<strong>R:</strong> リスタート</p>
+      <p class="hint">ネット近くでバウンド前に打つとボレー、高い球×Aボタンでスマッシュ。白い◎マークがボールの落下地点です。少し早めにボタンを押しても大丈夫（先行入力対応）。サーブは2ndになると安全なスライスサーブになります。<strong>R:</strong> リスタート</p>
     </div>
 
     <div class="touch">
@@ -256,14 +256,15 @@ function aimRight() { return keys.ArrowRight || keys.KeyD || stick.x > 0.45; }
 })();
 
 // ---------- Entities ----------
-const player = { x: 240, y: 440, speed: 3.8, swing: 0, moving: false, anim: 0, color: "#2563eb", cap: "#1e3a8a" };
+const player = { x: 240, y: 440, speed: 4.9, swing: 0, swingBuffer: 0, moving: false, anim: 0, color: "#2563eb", cap: "#1e3a8a" };
 const cpu    = { x: 240, y: 120, speed: 2.45, swing: 0, moving: false, anim: 0, color: "#f59e0b", cap: "#78350f" };
-const ball   = { x: 240, y: 430, vx: 0, vy: 0, z: 6, vz: 0, bounces: 0, lastHitter: null, serveFlight: false, dead: true, spin: "flat", gravity: 0.4, trail: [] };
+const ball   = { x: 240, y: 430, vx: 0, vy: 0, z: 6, vz: 0, bounces: 0, lastHitter: null, serveFlight: false, dead: true, spin: "flat", gravity: 0.4, trail: [], landX: null, landY: null };
+let frameCount = 0;
 let particles = [], floaters = [];
 
 function applyChar() {
   player.color = selectedChar.color; player.cap = selectedChar.cap;
-  player.speed = 3.05 + STAT[selectedChar.footwork] * 0.38;
+  player.speed = 4.0 + STAT[selectedChar.footwork] * 0.45;
 }
 
 let state = "serve", server = "player", faults = 0, cpuServeTimer = 0, pointTimer = 0;
@@ -313,7 +314,9 @@ function onSwing(shot) {
   queuedShot = shot;
   if (state === "serve" && server === "player") { doServe("player", shot); return; }
   if (state !== "rally") return;
-  player.swing = 10; tryHit(player, "player", shot);
+  player.swing = 10;
+  player.swingBuffer = 14; // swing stays "live" for a few frames, so early presses still connect
+  tryHit(player, "player", shot);
 }
 function doServe(who, shot = "top") {
   const isPlayer = who === "player";
@@ -356,7 +359,8 @@ function launchBall(tx, ty, shot, power = 0) {
     case "smash":  speed = 12.6; break;
     default:       speed = 7.4;
   }
-  speed *= court.speed * 0.74; // overall ball speed tuned down (~26% slower) for readability
+  speed *= court.speed * 0.52; // v4: much slower overall so the player can actually get to the ball
+  if (ball.lastHitter === "cpu") speed *= 0.9; // CPU returns are a touch gentler
   const duration = Math.max(20, dist / speed);
   ball.vx = dx / duration; ball.vy = dy / duration;
   // Spin changes gravity: topspin dips, slice floats, lob sails.
@@ -366,14 +370,23 @@ function launchBall(tx, ty, shot, power = 0) {
                : court.gravity;
   ball.vz = 0.5 * ball.gravity * duration * (shot === "lob" ? 1.25 : shot === "slice" || shot === "volley" || shot === "smash" ? 0.78 : 1);
   ball.spin = shot; ball.bounces = 0;
+  // Predict the first bounce so the player can see where the ball will land.
+  {
+    let sx = ball.x, sy = ball.y, sz = ball.z, svz = ball.vz;
+    ball.landX = null; ball.landY = null;
+    for (let i = 0; i < 240; i++) {
+      sx += ball.vx; sy += ball.vy; sz += svz; svz -= ball.gravity;
+      if (sz <= 0 && svz < 0) { ball.landX = sx; ball.landY = sy; break; }
+    }
+  }
 }
 function tryHit(p, who, shot) {
   if (ball.dead || ball.lastHitter === who) return;
   const isPlayer = who === "player";
   const d = Math.hypot(ball.x - p.x, ball.y - p.y);
-  const range = 46 + (isPlayer ? selectedChar.racket : 0);
+  const range = (isPlayer ? 60 : 46) + (isPlayer ? selectedChar.racket : 0);
   const toward = isPlayer ? ball.vy > -1.2 : ball.vy < 1.2;
-  if (d > range || ball.z > 62 || !toward) return;
+  if (d > range || ball.z > 70 || !toward) return;
 
   // Shot identity: high ball + topspin near the net = smash; no bounce + close to net = volley.
   let type = shot;
@@ -464,6 +477,7 @@ function update() {
   player.x = Math.max(18, Math.min(W - 18, player.x + mx * player.speed));
   player.y = Math.max(NET_Y + 22, Math.min(512, player.y + my * player.speed));
   if (player.swing > 0) player.swing--;
+  if (player.swingBuffer > 0) player.swingBuffer--;
   if (cpu.swing > 0) cpu.swing--;
   particles = particles.filter(pt => (pt.life-- > 0) && (pt.x += pt.vx, pt.y += pt.vy, true));
   floaters = floaters.filter(f => (f.life-- > 0) && (f.y -= 0.5, true));
@@ -474,6 +488,8 @@ function update() {
   }
 
   if (state === "rally" && !ball.dead) {
+    // Buffered swing: connect automatically the moment the ball comes into range.
+    if (player.swingBuffer > 0 && ball.lastHitter !== "player") tryHit(player, "player", queuedShot);
     if (ball.vy < 0 || ball.y < NET_Y) {
       const dx = ball.x - cpu.x, dy = Math.max(78, ball.y - 8) - cpu.y;
       const dd = Math.hypot(dx, dy) || 1;
@@ -582,8 +598,19 @@ function drawBall() {
   ctx.beginPath(); ctx.arc(ball.x, ball.y - ball.z, 6 * scale + ball.z * 0.04, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke();
 }
+function drawLandingMarker() {
+  if (state !== "rally" || ball.dead || ball.bounces > 0) return;
+  if (ball.landX === null || ball.landY < NET_Y) return; // only for balls coming at the player
+  const pulse = 8 + Math.sin(frameCount / 6) * 2.5;
+  ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(ball.landX, ball.landY, pulse + 5, (pulse + 5) * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(ball.landX - 5, ball.landY - 3); ctx.lineTo(ball.landX + 5, ball.landY + 3);
+  ctx.moveTo(ball.landX + 5, ball.landY - 3); ctx.lineTo(ball.landX - 5, ball.landY + 3); ctx.stroke();
+}
 function frame() {
-  update(); drawCourt();
+  frameCount++;
+  update(); drawCourt(); drawLandingMarker();
   particles.forEach(pt => { ctx.fillStyle = pt.color; ctx.fillRect(pt.x, pt.y, 3, 3); });
   drawCharacter(cpu, false);
   drawCharacter(player, true);
