@@ -28,6 +28,7 @@ h1 { margin: 8px 0 0; letter-spacing: 2px; font-size: 28px; }
 .scorebox strong { color: #ffd166; font-size: 22px; }
 .vs { opacity: .5; margin: 0 8px; }
 .message { min-height: 22px; color: #8ecae6; font-weight: 700; }
+.chain { min-height: 20px; color: #fb923c; font-weight: 700; font-size: 14px; }
 canvas {
   width: 100%; height: auto; background: #2a9d4a;
   border: 4px solid #f8f8f8; border-radius: 4px;
@@ -89,6 +90,7 @@ window.addEventListener('error', function (e) {
         <span>CPU <strong id="cpuGames">0</strong> — <span id="cpuPoints">0</span></span>
       </div>
       <div id="message" class="message">SPACE でサーブ！</div>
+      <div id="chain" class="chain"></div>
     </div>
 
     <canvas id="game" width="480" height="560"></canvas>
@@ -182,12 +184,22 @@ function inCourt(x, y) {
   return x >= b.left - 4 && x <= b.right + 4;
 }
 function inServiceBox(x, y, forPlayerServe) {
-  if (forPlayerServe) { if (y > NET_Y || y < 115) return false; }
-  else { if (y < NET_Y || y > 445) return false; }
+  // A serve must land between the service line and the net (a "long" serve is a fault),
+  // in the box DIAGONALLY opposite the server: deuce point = server's right side,
+  // which on screen is top-LEFT for the bottom player and bottom-RIGHT for the top CPU.
+  if (forPlayerServe) { if (y < 169 || y > NET_Y) return false; }
+  else { if (y < NET_Y || y > 391) return false; }
   const b = singlesBounds(y); const mid = (b.left + b.right) / 2;
-  const deuceRight = (rawPoints[0] + rawPoints[1]) % 2 === 0;
-  if (forPlayerServe) return deuceRight ? (x >= mid - 4 && x <= b.right + 4) : (x >= b.left - 4 && x <= mid + 4);
-  return deuceRight ? (x >= b.left - 4 && x <= mid + 4) : (x >= mid - 4 && x <= b.right + 4);
+  const deuce = (rawPoints[0] + rawPoints[1]) % 2 === 0;
+  if (forPlayerServe) return deuce ? (x >= b.left - 4 && x <= mid + 4) : (x >= mid - 4 && x <= b.right + 4);
+  return deuce ? (x >= mid - 4 && x <= b.right + 4) : (x >= b.left - 4 && x <= mid + 4);
+}
+function serveFault() {
+  if (faults >= 1) { awardPoint(server === "player" ? "cpu" : "player", "ダブルフォルト…"); }
+  else {
+    faults = 1; pendingSecondServe = true; state = "pointEnd"; pointTimer = 60; ball.dead = true;
+    setMessage("フォルト！ セカンドサーブへ");
+  }
 }
 
 // ---------- Audio (original square-wave jingles) ----------
@@ -269,9 +281,23 @@ function applyChar() {
 
 let state = "serve", server = "player", faults = 0, cpuServeTimer = 0, pointTimer = 0;
 let pendingSecondServe = false;
+let pendingLet = false;
 let rawPoints = [0, 0], games = [0, 0];
 const pointNames = ["0", "15", "30", "40"];
 const msgEl = document.getElementById("message");
+const chainEl = document.getElementById("chain");
+// Rally chain: consecutive hits with the SAME shot type (by either side)
+// make the ball faster and faster. Switching shot type resets the chain.
+const rallyChain = { type: null, count: 0 };
+const SHOT_LABELS = { top: "トップスピン", slice: "スライス", lob: "ロブ", volley: "ボレー", smash: "スマッシュ", flat: "サーブ" };
+function chainMultiplier() { return Math.min(1 + Math.max(0, rallyChain.count - 1) * 0.09, 1.65); }
+function updateChainUI() {
+  if (!chainEl) return;
+  chainEl.textContent = rallyChain.count >= 2
+    ? "🔥 " + (SHOT_LABELS[rallyChain.type] || "") + "チェーン x" + rallyChain.count + "（球速 +" + Math.round((chainMultiplier() - 1) * 100) + "%）"
+    : "";
+}
+function resetChain() { rallyChain.type = null; rallyChain.count = 0; updateChainUI(); }
 function setMessage(t) { msgEl.textContent = t; }
 function displayPoints(i) {
   const [p, c] = rawPoints;
@@ -288,20 +314,23 @@ function floater(text, x, y, color = "#ffd166") { floaters.push({ text, x, y, li
 
 // ---------- Flow ----------
 function resetPositions() {
-  player.x = server === "player" ? 210 : 240; player.y = 445;
-  cpu.x = server === "cpu" ? 270 : 240; cpu.y = 115;
+  const deuce = (rawPoints[0] + rawPoints[1]) % 2 === 0;
+  if (server === "player") { player.x = deuce ? 268 : 212; cpu.x = deuce ? 196 : 284; }
+  else { cpu.x = deuce ? 212 : 268; player.x = deuce ? 284 : 196; }
+  player.y = 445; cpu.y = 115;
+  rallyChain.type = null; rallyChain.count = 0; updateChainUI();
   ball.vx = ball.vy = ball.vz = 0; ball.bounces = 0; ball.dead = true;
   ball.lastHitter = null; ball.serveFlight = false; ball.trail = [];
   if (server === "player") { ball.x = player.x + 10; ball.y = player.y - 6; ball.z = 8; }
   else { ball.x = cpu.x - 10; ball.y = cpu.y + 6; ball.z = 8; }
 }
 function resetMatch() {
-  rawPoints = [0, 0]; games = [0, 0]; server = "player"; faults = 0; pendingSecondServe = false;
+  rawPoints = [0, 0]; games = [0, 0]; server = "player"; faults = 0; pendingSecondServe = false; pendingLet = false;
   state = "serve"; resetPositions(); updateScoreboard();
   setMessage(`${selectedChar.name}で ${court.name} コート — SPACE/Aボタンでサーブ！`);
 }
 function startServe() {
-  state = "serve"; faults = 0; pendingSecondServe = false; resetPositions();
+  state = "serve"; faults = 0; pendingSecondServe = false; pendingLet = false; resetPositions();
   setMessage(server === "player" ? "サーブ — Aボタン: 速いサーブ / Bボタン: 安全なスライスサーブ" : "CPU のサーブ…");
   cpuServeTimer = 70; updateScoreboard();
 }
@@ -328,16 +357,17 @@ function doServe(who, shot = "top") {
   if (isPlayer) {
     const b = singlesBounds(190), mid = (b.left + b.right) / 2;
     const rightBox = (rawPoints[0] + rawPoints[1]) % 2 === 0;
-    tx = mid + (rightBox ? 52 : -52);
+    tx = mid + (rightBox ? -52 : 52);
     if (aimLeft()) tx -= 34;
     if (aimRight()) tx += 34;
-    if (safe) tx = mid + (rightBox ? 42 : -42); // safer aim, closer to centre
+    if (safe) tx = mid + (rightBox ? -42 : 42); // safer aim, closer to centre
     // Never aim a serve outside its own service box.
-    tx = rightBox ? Math.max(mid + 8, Math.min(b.right - 14, tx)) : Math.max(b.left + 14, Math.min(mid - 8, tx));
+    tx = rightBox ? Math.max(b.left + 14, Math.min(mid - 8, tx)) : Math.max(mid + 8, Math.min(b.right - 14, tx));
   } else {
-    tx = player.x < 240 ? 295 + Math.random() * 35 : 150 + Math.random() * 35;
+    const deuce = (rawPoints[0] + rawPoints[1]) % 2 === 0;
+    tx = deuce ? 262 + Math.random() * 55 : 163 + Math.random() * 55;
   }
-  const ty = isPlayer ? 178 + Math.random() * 40 : 382 + Math.random() * 40;
+  const ty = isPlayer ? 178 + Math.random() * 40 : 335 + Math.random() * 38;
   ball.x = from.x; ball.y = from.y; ball.z = 10; ball.dead = false;
   ball.lastHitter = who; ball.serveFlight = true;
   const serveStat = isPlayer ? STAT[selectedChar.serve] : 2;
@@ -362,6 +392,7 @@ function launchBall(tx, ty, shot, power = 0) {
     default:       speed = 7.4;
   }
   speed *= court.speed * 0.40; // v5: slower again (about 1/3 of v1), combined with delta-time normalisation
+  if (!ball.serveFlight) speed *= chainMultiplier(); // same-shot chain escalation
   if (ball.lastHitter === "cpu") speed *= 0.85; // CPU returns are gentler still
   const duration = Math.max(20, dist / speed);
   ball.vx = dx / duration; ball.vy = dy / duration;
@@ -385,6 +416,7 @@ function launchBall(tx, ty, shot, power = 0) {
 }
 function tryHit(p, who, shot) {
   if (ball.dead || ball.lastHitter === who) return;
+  if (ball.serveFlight) return; // a serve must bounce before anyone may hit it
   const isPlayer = who === "player";
   const d = Math.hypot(ball.x - p.x, ball.y - p.y);
   const range = (isPlayer ? 60 : 46) + (isPlayer ? selectedChar.racket : 0);
@@ -418,8 +450,13 @@ function tryHit(p, who, shot) {
     else if (type === "volley") floater("VOLLEY!", p.x, p.y - 36, "#8ecae6");
     else if (type === "top" && d < 26 && ball.z > 4 && ball.z < 30) { power += 1.5; floater("TOPSPIN!", p.x, p.y - 36); }
   }
+  // Chain bookkeeping: same type as the previous rally hit -> chain grows.
+  if (type === rallyChain.type) rallyChain.count++;
+  else { rallyChain.type = type; rallyChain.count = 1; }
   ball.lastHitter = who; ball.serveFlight = false;
   launchBall(targetX, targetY, type, power);
+  updateChainUI();
+  if (rallyChain.count >= 3) floater("CHAIN x" + rallyChain.count + "!", p.x, p.y - 52, "#fb923c");
   beep(type === "smash" ? 460 : type === "slice" ? 200 : 300);
 }
 function awardPoint(winner, reason) {
@@ -447,14 +484,7 @@ function handleBounce() {
     // Dust puff in the court's colour.
     for (let i = 0; i < 6; i++) particles.push({ x: ball.x + (Math.random() - .5) * 12, y: ball.y, vx: (Math.random() - .5) * 1.4, vy: -Math.random() * 1.2, life: 18, color: court.dust });
     if (ball.serveFlight) {
-      if (!inServiceBox(ball.x, ball.y, ball.lastHitter === "player")) {
-        if (faults >= 1) { awardPoint(ball.lastHitter === "player" ? "cpu" : "player", "ダブルフォルト…"); }
-        else {
-          faults = 1; pendingSecondServe = true; state = "pointEnd"; pointTimer = 60; ball.dead = true;
-          setMessage("フォルト！ セカンドサーブへ");
-        }
-        return;
-      }
+      if (!inServiceBox(ball.x, ball.y, ball.lastHitter === "player")) { serveFault(); return; }
       ball.serveFlight = false;
     } else if (!inCourt(ball.x, ball.y)) {
       awardPoint(ball.lastHitter === "player" ? "cpu" : "player", "アウト！");
@@ -470,6 +500,8 @@ function handleBounce() {
 let DT = 1, lastFrameTime = 0;
 function cpuChooseShot() {
   if (ball.z > 38 && Math.random() < 0.6) return "top"; // becomes smash
+  // Mirror the rally's chain shot fairly often, so same-type rallies heat up.
+  if (rallyChain.type && ["top", "slice", "lob"].includes(rallyChain.type) && Math.random() < 0.45) return rallyChain.type;
   const r = Math.random();
   return r < 0.55 ? "top" : r < 0.85 ? "slice" : "lob";
 }
@@ -516,9 +548,16 @@ function update() {
 
     const prevY = ball.y - ball.vy * DT;
     if ((prevY - NET_Y) * (ball.y - NET_Y) < 0 && ball.z < 15) {
-      awardPoint(ball.lastHitter === "player" ? "cpu" : "player", "ネット…");
+      if (ball.serveFlight) {
+        if (ball.landX !== null && inServiceBox(ball.landX, ball.landY, ball.lastHitter === "player")) {
+          pendingLet = true; state = "pointEnd"; pointTimer = 55; ball.dead = true;
+          setMessage("レット！ サーブやり直し");
+        } else serveFault();
+      } else {
+        awardPoint(ball.lastHitter === "player" ? "cpu" : "player", "ネット…");
+      }
     }
-    if (ball.z <= 0 && ball.vz < 0) {
+    if (!ball.dead && ball.z <= 0 && ball.vz < 0) {
       ball.z = 0; ball.bounces++; beep(140, 0.04, 0.04);
       const vzIn = Math.abs(ball.vz);
       handleBounce();
@@ -530,12 +569,26 @@ function update() {
         ball.vx *= court.afterBounce * 0.9; ball.vy *= court.afterBounce * 0.9; // slower after the bounce = more time to react
       }
     }
-    if (ball.y < -40 || ball.y > H + 40 || ball.x < -40 || ball.x > W + 40) {
-      awardPoint(ball.lastHitter === "player" ? "cpu" : "player", "アウト！");
+    if (!ball.dead && (ball.y < -40 || ball.y > H + 40 || ball.x < -40 || ball.x > W + 40)) {
+      if (ball.bounces >= 1) {
+        // It already landed in (an out first bounce ends the point at the bounce),
+        // so flying off the stage now means the receiver never got it back.
+        awardPoint(ball.lastHitter, "決まった！");
+      } else {
+        awardPoint(ball.lastHitter === "player" ? "cpu" : "player", "アウト！");
+      }
     }
   }
 
-  if (state === "pointEnd") { pointTimer -= DT; if (pointTimer <= 0) { pendingSecondServe ? secondServe() : startServe(); } }
+  if (state === "pointEnd") {
+    pointTimer -= DT;
+    if (pointTimer <= 0) {
+      if (pendingLet) {
+        pendingLet = false; state = "serve"; resetPositions(); cpuServeTimer = 70;
+        setMessage(server === "player" ? "レット — もう一度サーブ" : "レット — CPUのサーブやり直し");
+      } else if (pendingSecondServe) secondServe(); else startServe();
+    }
+  }
 }
 
 // ---------- Draw ----------
