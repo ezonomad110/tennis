@@ -2,18 +2,44 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Retro Tennis — レトロテニス</title>
 <style>
 * { box-sizing: border-box; }
+html, html, body {
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+button { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
+canvas { touch-action: none; }
+body { height: 100%; }
 body {
   margin: 0;
   background: #141428;
   color: #f5f5f5;
   font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
   display: flex; justify-content: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
-.wrap { max-width: 520px; width: 100%; padding: 16px; text-align: center; }
+body.locked { overflow: hidden; overscroll-behavior: none; }
+.wrap { max-width: 520px; width: 100%; text-align: center; }
+.hidden { display: none !important; }
+#menuScreen { padding: 20px 16px 28px; }
+.menu-note { font-size: 12px; opacity: .65; line-height: 1.7; margin-top: 14px; }
+/* Game screen: exactly one viewport tall, no page scrolling.
+   The court area flexes; the canvas letterboxes inside it. */
+#gameScreen {
+  height: 100dvh;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 8px;
+}
+.canvasWrap { flex: 1 1 auto; min-height: 0; display: flex; }
+.back {
+  align-self: center; flex: none;
+  background: none; border: 1px solid #3d3d66; color: #9aa;
+  border-radius: 8px; padding: 6px 16px; font-size: 12px; cursor: pointer;
+}
 h1 { margin: 8px 0 0; letter-spacing: 2px; font-size: 28px; }
 .sub { opacity: .75; margin: 4px 0 14px; font-size: 13px; }
 .selectors { background: #1d1d38; border: 2px solid #3d3d66; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; text-align: left; }
@@ -23,23 +49,52 @@ h1 { margin: 8px 0 0; letter-spacing: 2px; font-size: 28px; }
 .btnrow button.active { border-color: #ffd166; background: #3a2f10; color: #ffd166; font-weight: 700; }
 .info { font-size: 12px; opacity: .85; min-height: 16px; margin: 5px 0 0; }
 .apply { width: 100%; margin-top: 10px; background: #e63946; color: #fff; border: none; border-radius: 8px; padding: 10px; font-weight: 700; font-size: 14px; cursor: pointer; }
-.hud { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.hud { display: flex; flex-direction: column; gap: 4px; flex: none; }
 .scorebox { font-size: 18px; background: #16213e; padding: 8px 12px; border-radius: 8px; }
 .scorebox strong { color: #ffd166; font-size: 22px; }
 .vs { opacity: .5; margin: 0 8px; }
 .message { min-height: 22px; color: #8ecae6; font-weight: 700; }
 .chain { min-height: 20px; color: #fb923c; font-weight: 700; font-size: 14px; }
 canvas {
-  width: 100%; height: auto; background: #2a9d4a;
+  flex: 1 1 auto; min-width: 0; min-height: 0;
+  width: 100%; height: 100%;
+  object-fit: contain;
+  background: #2a9d4a;
   border: 4px solid #f8f8f8; border-radius: 4px;
   image-rendering: pixelated;
+  touch-action: none;
 }
 .controls { font-size: 13px; opacity: .9; line-height: 1.6; }
 .hint { opacity: .7; }
-.touch { display: none; gap: 10px; justify-content: space-between; align-items: center; margin-top: 12px; }
-.touch .shots { display: flex; flex-direction: column; gap: 8px; }
-.touch button { font-size: 15px; padding: 12px 14px; border-radius: 10px; border: none; background: #16213e; color: #fff; }
-.touch button.swing { background: #e63946; font-weight: 700; }
+.touch { display: none; gap: 10px; justify-content: space-between; align-items: center; flex: none; }
+.hudrow { display: flex; gap: 8px; align-items: stretch; }
+.hudrow .scorebox { flex: 1; }
+.pause {
+  flex: none; width: 50px; font-size: 18px; cursor: pointer;
+  background: #16213e; color: #fff; border: 2px solid #3d3d66; border-radius: 8px;
+}
+/* Super Famicom-style diamond pad:  X (top) / Y (left) / A (right) / B (bottom).
+   Button colours match the ball colours of each shot type. */
+.pad {
+  display: grid; flex: none;
+  grid-template-columns: repeat(3, 58px);
+  grid-template-rows: repeat(3, 58px);
+  gap: 4px;
+}
+.pad-btn {
+  border-radius: 50%; border: 2px solid rgba(0,0,0,.35);
+  font-size: 12px; font-weight: 700; line-height: 1.25; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+}
+.pad-btn:active { filter: brightness(0.85); }
+.pos-x { grid-column: 2; grid-row: 1; }
+.pos-y { grid-column: 1; grid-row: 2; }
+.pos-a { grid-column: 3; grid-row: 2; }
+.pos-b { grid-column: 2; grid-row: 3; }
+.c-spin  { background: #d9f99d; color: #1a2e05; }
+.c-slice { background: #f8fafc; color: #111827; }
+.c-lob   { background: #fdba74; color: #431407; }
+.c-drop  { background: #7dd3fc; color: #082f49; }
 .stick {
   position: relative; flex: 0 0 auto;
   width: 128px; height: 128px; border-radius: 50%;
@@ -66,44 +121,61 @@ window.addEventListener('error', function (e) {
 </head>
 <body>
   <main class="wrap">
-    <h1>🎾 RETRO TENNIS</h1>
-    <p class="sub">ファミコン時代のテニスゲームへのオマージュ — オリジナル作品です</p>
 
-    <section class="selectors">
-      <div>
-        <h2>選手を選ぶ</h2>
-        <div id="charSelect" class="btnrow"></div>
-        <p id="charInfo" class="info"></p>
-      </div>
-      <div>
-        <h2>コートを選ぶ</h2>
-        <div id="courtSelect" class="btnrow"></div>
-        <p id="courtInfo" class="info"></p>
-      </div>
-      <button id="btnApply" class="apply">この条件で試合開始</button>
-    </section>
+    <!-- ===== Menu screen: choose player & court ===== -->
+    <div id="menuScreen" class="screen">
+      <h1>🎾 RETRO TENNIS</h1>
+      <p class="sub">ファミコン時代のテニスゲームへのオマージュ — オリジナル作品です</p>
 
-    <div class="hud">
-      <div class="scorebox">
-        <span><span id="playerName">YOU</span> <strong id="playerGames">0</strong> — <span id="playerPoints">0</span></span>
-        <span class="vs">|</span>
-        <span>CPU <strong id="cpuGames">0</strong> — <span id="cpuPoints">0</span></span>
-      </div>
-      <div id="message" class="message">SPACE でサーブ！</div>
-      <div id="chain" class="chain"></div>
+      <section class="selectors">
+        <div>
+          <h2>選手を選ぶ</h2>
+          <div id="charSelect" class="btnrow"></div>
+          <p id="charInfo" class="info"></p>
+        </div>
+        <div>
+          <h2>コートを選ぶ</h2>
+          <div id="courtSelect" class="btnrow"></div>
+          <p id="courtInfo" class="info"></p>
+        </div>
+        <button id="btnStart" class="apply">▶ ゲームスタート</button>
+      </section>
+
+      <p class="menu-note">ラリーで同じ球種が続くほどチェーンが伸びて球が速くなります（両プレイヤー共通）。スピン⇔スライスに切り替わると切れますが、ロブとドロップはワイルドカードで切れません。</p>
     </div>
 
-    <canvas id="game" width="480" height="560"></canvas>
-
-
-    <div class="touch">
-      <div id="stick" class="stick" aria-label="仮想スティック"><div id="stickKnob" class="stick-knob"></div></div>
-      <div class="shots">
-        <button id="btnTop" class="swing">A スピン</button>
-        <button id="btnSlice">B スライス</button>
-        <button id="btnLob">C ロブ</button>
+    <!-- ===== Game screen: fixed to one screen, no scrolling ===== -->
+    <div id="gameScreen" class="screen hidden">
+      <div class="hud">
+        <div class="hudrow">
+          <div class="scorebox">
+            <span><span id="playerName">YOU</span> <strong id="playerGames">0</strong> — <span id="playerPoints">0</span></span>
+            <span class="vs">|</span>
+            <span>CPU <strong id="cpuGames">0</strong> — <span id="cpuPoints">0</span></span>
+          </div>
+          <button id="btnPause" class="pause" aria-label="一時停止">⏸</button>
+        </div>
+        <div id="message" class="message">SPACE でサーブ！</div>
+        <div id="chain" class="chain"></div>
       </div>
+
+      <div class="canvasWrap">
+        <canvas id="game" width="480" height="560"></canvas>
+      </div>
+
+      <div class="touch">
+        <div id="stick" class="stick" aria-label="仮想スティック"><div id="stickKnob" class="stick-knob"></div></div>
+        <div class="pad" aria-label="ショットボタン">
+          <button id="btnSliceX" class="pad-btn pos-x c-slice">X<br>スライス</button>
+          <button id="btnLob" class="pad-btn pos-y c-lob">Y<br>ロブ</button>
+          <button id="btnSpinA" class="pad-btn pos-a c-spin">A<br>スピン</button>
+          <button id="btnDrop" class="pad-btn pos-b c-drop">B<br>ドロップ</button>
+        </div>
+      </div>
+
+      <button id="btnBack" class="back">← メニューに戻る</button>
     </div>
+
   </main>
   <script>
 // Retro Tennis v2 — original homage to Famicom-era tennis games.
@@ -161,7 +233,26 @@ function refreshInfo() {
 }
 buildSelect("charSelect", CHARACTERS, c => c.name, c => { selectedChar = c; applyChar(); refreshInfo(); }, 1);
 buildSelect("courtSelect", Object.values(COURTS), c => c.name, c => { court = c; refreshInfo(); }, 0);
-document.getElementById("btnApply").addEventListener("click", () => { applyChar(); resetMatch(); });
+// ---------- Screens: menu (player/court select) -> game ----------
+let appScreen = "menu";
+function showGame() {
+  appScreen = "game";
+  document.getElementById("menuScreen").classList.add("hidden");
+  document.getElementById("gameScreen").classList.remove("hidden");
+  document.body.classList.add("locked");
+  window.scrollTo(0, 0);
+  applyChar(); resetMatch();
+}
+function showMenu() {
+  setPaused(false);
+  appScreen = "menu";
+  document.getElementById("gameScreen").classList.add("hidden");
+  document.getElementById("menuScreen").classList.remove("hidden");
+  document.body.classList.remove("locked");
+  window.scrollTo(0, 0);
+}
+document.getElementById("btnStart").addEventListener("click", showGame);
+document.getElementById("btnBack").addEventListener("click", showMenu);
 
 // ---------- Court geometry ----------
 function lerp(a, b, t) { return a + (b - a) * t; }
@@ -228,7 +319,9 @@ addEventListener("keydown", (e) => {
   if (e.code === "Space" || e.code === "KeyZ") onSwing("top");
   if (e.code === "KeyX") onSwing("slice");
   if (e.code === "KeyC") onSwing("lob");
+  if (e.code === "KeyV" || e.code === "KeyB") onSwing("drop");
   if (e.code === "KeyR") { applyChar(); resetMatch(); }
+  if (e.code === "KeyP") togglePause();
 });
 addEventListener("keyup", (e) => { keys[e.code] = false; });
 function bindBtn(id, fn) {
@@ -243,7 +336,27 @@ function bindHold(id, code) {
   el.addEventListener("touchstart", on); el.addEventListener("touchend", off);
   el.addEventListener("mousedown", on); el.addEventListener("mouseup", off);
 }
-bindBtn("btnTop", () => onSwing("top")); bindBtn("btnSlice", () => onSwing("slice")); bindBtn("btnLob", () => onSwing("lob"));
+bindBtn("btnSliceX", () => onSwing("slice"));
+bindBtn("btnSpinA", () => onSwing("top"));
+bindBtn("btnDrop", () => onSwing("drop"));
+bindBtn("btnLob", () => onSwing("lob"));
+
+// iOS Safari: long-pressing buttons or text opens the copy/lookup/translate
+// callout and selects text mid-game. Disable selection & callouts outright.
+if (typeof document.addEventListener === "function") {
+  document.addEventListener("contextmenu", e => e.preventDefault());
+  document.addEventListener("selectstart", e => e.preventDefault());
+}
+
+// ---------- Pause ----------
+let paused = false;
+function setPaused(v) {
+  paused = v;
+  const b = document.getElementById("btnPause");
+  if (b) b.textContent = paused ? "▶" : "⏸";
+}
+function togglePause() { if (appScreen === "game") setPaused(!paused); }
+document.getElementById("btnPause").addEventListener("click", togglePause);
 
 // ---------- Virtual stick (analog, replaces the D-pad buttons) ----------
 const stick = { x: 0, y: 0, active: false, id: null };
@@ -270,7 +383,10 @@ function aimRight() { return keys.ArrowRight || keys.KeyD || stick.x > 0.45; }
 // ---------- Entities ----------
 const player = { x: 240, y: 440, speed: 4.9, swing: 0, swingBuffer: 0, moving: false, anim: 0, color: "#2563eb", cap: "#1e3a8a" };
 const cpu    = { x: 240, y: 120, speed: 2.45, swing: 0, moving: false, anim: 0, color: "#f59e0b", cap: "#78350f" };
-const ball   = { x: 240, y: 430, vx: 0, vy: 0, z: 6, vz: 0, bounces: 0, lastHitter: null, serveFlight: false, dead: true, spin: "flat", gravity: 0.4, trail: [], landX: null, landY: null };
+const ball   = { x: 240, y: 430, vx: 0, vy: 0, z: 6, vz: 0, bounces: 0, lastHitter: null, serveFlight: false, dead: true, spin: "flat", type: "top", gravity: 0.4, trail: [], landX: null, landY: null };
+function ballColor() {
+  return ball.type === "slice" ? "#f8fafc" : ball.type === "lob" ? "#fdba74" : ball.type === "drop" ? "#7dd3fc" : "#d9f99d";
+}
 let frameCount = 0;
 let particles = [], floaters = [];
 
@@ -288,6 +404,10 @@ const msgEl = document.getElementById("message");
 const chainEl = document.getElementById("chain");
 // Rally chain: consecutive hits with the SAME shot type (by either side)
 // make the ball faster and faster. Switching shot type resets the chain.
+// One shared chain for the whole rally, built by BOTH players' hits.
+// Type is spin ("top") or slice. Switching between spin and slice breaks it.
+// Lob is a wildcard: it neither breaks nor grows the chain, and ignores its speed.
+// Volleys and smashes connect the chain (they grow it) as before.
 const rallyChain = { type: null, count: 0 };
 const SHOT_LABELS = { top: "トップスピン", slice: "スライス", lob: "ロブ", volley: "ボレー", smash: "スマッシュ", flat: "サーブ" };
 function chainMultiplier() { return Math.min(1 + Math.max(0, rallyChain.count - 1) * 0.09, 1.65); }
@@ -318,7 +438,7 @@ function resetPositions() {
   if (server === "player") { player.x = deuce ? 268 : 212; cpu.x = deuce ? 196 : 284; }
   else { cpu.x = deuce ? 212 : 268; player.x = deuce ? 284 : 196; }
   player.y = 445; cpu.y = 115;
-  rallyChain.type = null; rallyChain.count = 0; updateChainUI();
+  resetChain();
   ball.vx = ball.vy = ball.vz = 0; ball.bounces = 0; ball.dead = true;
   ball.lastHitter = null; ball.serveFlight = false; ball.trail = [];
   if (server === "player") { ball.x = player.x + 10; ball.y = player.y - 6; ball.z = 8; }
@@ -372,13 +492,14 @@ function doServe(who, shot = "top") {
   ball.lastHitter = who; ball.serveFlight = true;
   const serveStat = isPlayer ? STAT[selectedChar.serve] : 2;
   const power = safe ? 0 : serveStat;
-  launchBall(tx, ty, safe ? "slice" : "flat", power);
+  launchBall(tx, ty, safe ? "slice" : "flat", power, safe ? "slice" : "top");
   state = "rally"; beep(isPlayer ? 260 : 220);
   const kmh = Math.round(94 + serveStat * 12 + (safe ? -22 : Math.random() * 8));
   if (!safe) floater(kmh + " km/h!", from.x, from.y - 34, "#fff");
   setMessage(second ? "" : "");
 }
-function launchBall(tx, ty, shot, power = 0) {
+function launchBall(tx, ty, shot, power = 0, ballType) {
+  ball.type = ballType || (shot === "flat" ? "top" : shot);
   const dx = tx - ball.x, dy = ty - ball.y;
   const dist = Math.hypot(dx, dy) || 1;
   let speed;
@@ -387,20 +508,28 @@ function launchBall(tx, ty, shot, power = 0) {
     case "top":    speed = 8.2 + power * 0.5; break;
     case "slice":  speed = 6.6 + power * 0.3; break;
     case "lob":    speed = 5.9; break;
+    case "drop":   speed = 5.2; break;
     case "volley": speed = 9.6 + power * 0.5; break;
     case "smash":  speed = 12.6; break;
     default:       speed = 7.4;
   }
   speed *= court.speed * 0.40; // v5: slower again (about 1/3 of v1), combined with delta-time normalisation
-  if (!ball.serveFlight) speed *= chainMultiplier(); // same-shot chain escalation
+  if (!ball.serveFlight && shot !== "lob" && shot !== "drop") speed *= chainMultiplier(); // lob & drop ignore the chain speed
   if (ball.lastHitter === "cpu") speed *= 0.85; // CPU returns are gentler still
   const duration = Math.max(20, dist / speed);
   ball.vx = dx / duration; ball.vy = dy / duration;
   // Arc height is FIXED per shot type (peak height in px), independent of speed.
   // Slowing the ball down must not make the arc taller: gravity and vz are
   // derived from the desired peak, so topspin stays low and only the lob goes high.
-  const PEAKS = { flat: 24, top: 30, slice: 20, lob: 95, volley: 16, smash: 12 };
-  const peak = (PEAKS[shot] || 24) * court.peak;
+  const PEAKS = { flat: 24, top: 30, slice: 20, lob: 95, volley: 16, smash: 12, drop: 15 };
+  let peak = (PEAKS[shot] || 24) * court.peak;
+  if (shot === "drop") {
+    // z at the net = z0(1-f) + 4*peak*f(1-f), where f is the fraction of the
+    // flight at which the ball crosses NET_Y. Solve for z >= 20 so the drop
+    // clears the net from any depth, while staying as low as possible.
+    const f = (ball.y - NET_Y) / ((ball.y - ty) || 1);
+    if (f > 0 && f < 1) peak = Math.max(peak, Math.min(64, (20 - ball.z * (1 - f)) / (4 * f * (1 - f))));
+  }
   ball.gravity = 8 * peak / (duration * duration);
   ball.vz = 4 * peak / duration - ball.z / duration; // lands at the target; negative (downward) for smashes from high balls
   ball.spin = shot; ball.bounces = 0;
@@ -427,12 +556,13 @@ function tryHit(p, who, shot) {
   let type = shot;
   const nearNet = isPlayer ? p.y < 372 : p.y > 188;
   if (ball.bounces === 0 && ball.z > 36 && shot === "top") type = "smash";
-  else if (ball.bounces === 0 && nearNet) type = shot === "lob" ? "lob" : "volley";
+  else if (ball.bounces === 0 && nearNet) type = (shot === "lob" || shot === "drop") ? shot : "volley";
 
   const opp = isPlayer ? cpu : player;
   let targetY, power = 0;
   if (type === "smash") { targetY = isPlayer ? 88 + Math.random() * 40 : 462 + Math.random() * 22; }
   else if (type === "lob") { targetY = isPlayer ? 82 + Math.random() * 26 : 470 + Math.random() * 16; }
+  else if (type === "drop") { targetY = isPlayer ? 244 + Math.random() * 24 : 292 + Math.random() * 24; } // lands just over the net
   else if (type === "slice") { targetY = isPlayer ? 120 + Math.random() * 70 : 420 + Math.random() * 55; }
   else { targetY = isPlayer ? 95 + Math.random() * 55 : 450 + Math.random() * 32; }
 
@@ -450,13 +580,26 @@ function tryHit(p, who, shot) {
     else if (type === "volley") floater("VOLLEY!", p.x, p.y - 36, "#8ecae6");
     else if (type === "top" && d < 26 && ball.z > 4 && ball.z < 30) { power += 1.5; floater("TOPSPIN!", p.x, p.y - 36); }
   }
-  // Chain bookkeeping: same type as the previous rally hit -> chain grows.
-  if (type === rallyChain.type) rallyChain.count++;
-  else { rallyChain.type = type; rallyChain.count = 1; }
+  // Chain bookkeeping. The chain tracks the BALL type (topspin/slice/lob chosen
+  // with the buttons). Strokes are judged by that type: same type grows the
+  // chain, a different type resets it. Volleys and smashes are "wildcards":
+  // whichever button/form they come from, they always connect the current
+  // chain instead of breaking it (starting one from the button type if none).
+  if (type === "lob" || type === "drop") {
+    // Wildcard: the chain passes through untouched (no break, no growth).
+  } else if (type === "volley" || type === "smash") {
+    if (!rallyChain.type) rallyChain.type = shot === "lob" ? "top" : shot;
+    rallyChain.count++;
+  } else if (type === rallyChain.type) {
+    rallyChain.count++;
+  } else {
+    // Spin <-> slice switch: the chain breaks and a new one starts.
+    rallyChain.type = type; rallyChain.count = 1;
+  }
   ball.lastHitter = who; ball.serveFlight = false;
-  launchBall(targetX, targetY, type, power);
+  launchBall(targetX, targetY, type, power, shot);
   updateChainUI();
-  if (rallyChain.count >= 3) floater("CHAIN x" + rallyChain.count + "!", p.x, p.y - 52, "#fb923c");
+  if (rallyChain.count >= 3 && type !== "lob" && type !== "drop") floater("CHAIN x" + rallyChain.count + "!", p.x, p.y - 52, "#fb923c");
   beep(type === "smash" ? 460 : type === "slice" ? 200 : 300);
 }
 function awardPoint(winner, reason) {
@@ -499,11 +642,15 @@ function handleBounce() {
 // no longer run the whole game at double speed in real time.
 let DT = 1, lastFrameTime = 0;
 function cpuChooseShot() {
-  if (ball.z > 38 && Math.random() < 0.6) return "top"; // becomes smash
-  // Mirror the rally's chain shot fairly often, so same-type rallies heat up.
-  if (rallyChain.type && ["top", "slice", "lob"].includes(rallyChain.type) && Math.random() < 0.45) return rallyChain.type;
+  if (ball.z > 38 && Math.random() < 0.6) return "top"; // becomes a smash (wildcard, keeps the chain)
+  if (cpu.y > 195 && Math.random() < 0.25) return "drop"; // close to the net: drop it short (wildcard)
   const r = Math.random();
-  return r < 0.55 ? "top" : r < 0.85 ? "slice" : "lob";
+  if (rallyChain.type) {
+    if (r < 0.72) return rallyChain.type;                            // keep the same-type rally going
+    if (r < 0.84) return "lob";                                      // wildcard: chain survives
+    return rallyChain.type === "top" ? "slice" : "top";              // occasionally break it on purpose
+  }
+  return r < 0.6 ? "top" : r < 0.9 ? "slice" : "lob";
 }
 function update() {
   let mx = 0, my = 0;
@@ -565,7 +712,7 @@ function update() {
         // Post-bounce arc is also capped: a modest hop the receiver can actually hit,
         // instead of inheriting the (possibly huge) incoming vertical speed.
         ball.gravity = court === COURTS.cosmo ? 0.13 : 0.16;
-        ball.vz = Math.min(3.4, 4.4 * court.bounce * (ball.spin === "slice" && court === COURTS.lawn ? 0.7 : 1));
+        ball.vz = Math.min(3.4, 4.4 * court.bounce * (ball.type === "slice" && court === COURTS.lawn ? 0.7 : 1));
         ball.vx *= court.afterBounce * 0.9; ball.vy *= court.afterBounce * 0.9; // slower after the bounce = more time to react
       }
     }
@@ -657,7 +804,7 @@ function drawBall() {
   });
   ctx.fillStyle = "rgba(0,0,0,.3)";
   ctx.beginPath(); ctx.ellipse(ball.x, ball.y + 4, 7 * scale, 3 * scale, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = ball.spin === "slice" ? "#f8fafc" : ball.spin === "lob" ? "#fdba74" : "#d9f99d";
+  ctx.fillStyle = ballColor();
   ctx.beginPath(); ctx.arc(ball.x, ball.y - ball.z, 6 * scale + ball.z * 0.04, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke();
 }
@@ -675,13 +822,20 @@ function frame(timestamp) {
   frameCount++;
   if (timestamp && lastFrameTime) DT = Math.min(2.5, Math.max(0.2, (timestamp - lastFrameTime) / 16.667));
   if (timestamp) lastFrameTime = timestamp;
-  update(); drawCourt(); drawLandingMarker();
+  if (appScreen !== "game") { requestAnimationFrame(frame); return; } // menu open: game is paused
+  if (!paused) update();
+  drawCourt(); drawLandingMarker();
   particles.forEach(pt => { ctx.fillStyle = pt.color; ctx.fillRect(pt.x, pt.y, 3, 3); });
   drawCharacter(cpu, false);
   drawCharacter(player, true);
   if (state !== "matchEnd") drawBall();
   ctx.font = "bold 15px monospace"; ctx.textAlign = "center";
   floaters.forEach(f => { ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y); });
+  if (paused) {
+    ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#ffffff"; ctx.font = "bold 30px monospace"; ctx.textAlign = "center";
+    ctx.fillText("⏸ PAUSE", W / 2, H / 2);
+  }
   requestAnimationFrame(frame);
 }
 
