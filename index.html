@@ -111,6 +111,84 @@ canvas {
 }
 @media (pointer: coarse), (max-width: 640px) { .touch { display: flex; } }
 
+/* ===== Luminous theme: neon colours, glow everywhere. Gameplay unchanged. ===== */
+body.neon {
+  background: radial-gradient(1200px 800px at 50% -10%, #2b1065 0%, #0b0620 55%, #05010f 100%);
+  background-size: 150% 150%;
+  animation: neonBg 14s ease-in-out infinite alternate;
+  color: #e0f2fe;
+}
+@keyframes neonBg {
+  from { background-position: 0% 0%; }
+  to { background-position: 100% 60%; }
+}
+body.neon h1 {
+  background: linear-gradient(90deg, #22d3ee, #a78bfa, #f472b6);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 14px rgba(167,139,250,.45));
+}
+body.neon .sub { color: #a5b4fc; }
+body.neon .info { color: #a5f3fc; }
+body.neon .menu-note { color: #c4b5fd; }
+body.neon .scorebox {
+  background: rgba(10,6,32,.88); border: 1px solid #22d3ee; color: #e0f2fe;
+  box-shadow: 0 0 14px rgba(34,211,238,.55), inset 0 0 12px rgba(34,211,238,.15);
+}
+body.neon .scorebox strong { color: #fde047; text-shadow: 0 0 8px rgba(253,224,71,.85); }
+body.neon .message { color: #a5f3fc; text-shadow: 0 0 10px rgba(34,211,238,.85); }
+body.neon .chain {
+  color: #fff; font-size: 17px;
+  text-shadow: 0 0 6px #f59e0b, 0 0 16px #f97316, 0 0 30px #ef4444;
+}
+body.neon .chain.pop { animation: chainPop .38s ease-out; }
+@keyframes chainPop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.45) rotate(-2deg); }
+  100% { transform: scale(1); }
+}
+body.neon canvas {
+  border-color: #22d3ee;
+  box-shadow: 0 0 22px rgba(34,211,238,.5), 0 0 64px rgba(167,139,250,.28);
+}
+body.neon .btnrow button {
+  background: #12082e; color: #e0f2fe; border: 1px solid #7c3aed;
+  box-shadow: 0 0 8px rgba(124,58,237,.35);
+}
+body.neon .btnrow button.active {
+  background: linear-gradient(90deg, #0891b2, #7c3aed, #db2777); color: #fff;
+  border-color: transparent; box-shadow: 0 0 16px rgba(219,39,119,.6);
+}
+body.neon .apply {
+  background: linear-gradient(90deg, #06b6d4, #d946ef); color: #fff;
+  box-shadow: 0 0 20px rgba(217,70,239,.55);
+}
+body.neon .pause {
+  background: #12082e; border-color: #22d3ee; color: #fff;
+  box-shadow: 0 0 10px rgba(34,211,238,.5);
+}
+body.neon .back { background: #12082e; color: #a5f3fc; border: 1px solid #7c3aed; }
+body.neon .stick {
+  border-color: #22d3ee; background: rgba(8,4,24,.6);
+  box-shadow: 0 0 16px rgba(34,211,238,.45), inset 0 0 18px rgba(34,211,238,.2);
+}
+body.neon .stick-knob {
+  background: radial-gradient(circle at 35% 35%, #a5f3fc, #0891b2 60%, #155e75);
+  border-color: #a5f3fc; box-shadow: 0 0 14px rgba(34,211,238,.8);
+}
+body.neon .c-spin  { background: #a3e635; color: #1a2e05; border-color: #ecfccb; box-shadow: 0 0 18px #a3e635, 0 0 44px rgba(163,230,53,.5); }
+body.neon .c-slice { background: #f0f9ff; color: #082f49; border-color: #ffffff; box-shadow: 0 0 18px #7dd3fc, 0 0 44px rgba(125,211,252,.5); }
+body.neon .c-lob   { background: #fb923c; color: #431407; border-color: #ffedd5; box-shadow: 0 0 18px #fb923c, 0 0 44px rgba(251,146,60,.5); }
+body.neon .c-drop  { background: #38bdf8; color: #082f49; border-color: #e0f2fe; box-shadow: 0 0 18px #38bdf8, 0 0 44px rgba(56,189,248,.55); }
+
+body.neon .scorebox strong.scorepop { display: inline-block; animation: scorePop .45s ease-out; }
+@keyframes scorePop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.9); }
+  100% { transform: scale(1); }
+}
+
+body.neon canvas { background: #05010f; }
+
 </style>
 <script>
 window.addEventListener('error', function (e) {
@@ -128,6 +206,16 @@ window.addEventListener('error', function (e) {
       <p class="sub">ファミコン時代のテニスゲームへのオマージュ — オリジナル作品です</p>
 
       <section class="selectors">
+        <div>
+          <h2>モードを選ぶ</h2>
+          <div id="modeSelect" class="btnrow"></div>
+          <p id="modeInfo" class="info"></p>
+        </div>
+        <div>
+          <h2>テーマを選ぶ</h2>
+          <div id="themeSelect" class="btnrow"></div>
+          <p id="themeInfo" class="info"></p>
+        </div>
         <div>
           <h2>選手を選ぶ</h2>
           <div id="charSelect" class="btnrow"></div>
@@ -194,12 +282,27 @@ const WIN_GAMES = 3;
 // ---------- Characters (all original) ----------
 const STAT = { A: 3, B: 2, C: 1 };
 const CHARACTERS = [
-  { id: "gou",   name: "ゴウ",   serve: "A", stroke: "A", volley: "C", footwork: "B", racket: 0,  color: "#dc2626", cap: "#7f1d1d", desc: "パワー型。サーブとストロークが強烈、ボレーは苦手。" },
-  { id: "ken",   name: "ケン",   serve: "B", stroke: "B", volley: "B", footwork: "B", racket: 0,  color: "#2563eb", cap: "#1e3a8a", desc: "バランス型。穴がなく扱いやすい。" },
-  { id: "saki",  name: "サキ",   serve: "C", stroke: "B", volley: "B", footwork: "B", racket: 10, color: "#db2777", cap: "#831843", desc: "大きなラケットで当たりやすい、初心者向け。サーブは控えめ。" },
-  { id: "hayato",name: "ハヤト", serve: "C", stroke: "B", volley: "A", footwork: "A", racket: 0,  color: "#16a34a", cap: "#14532d", desc: "俊足＋ボレーの達人。ネットプレーで攻める。" },
+  { id: "gou",   name: "ゴウ",   serve: "A", stroke: "A", volley: "C", footwork: "B", racket: 0,  color: "#dc2626", cap: "#7f1d1d", skin: "#f2c894", hair: "cap", desc: "パワー型。サーブとストロークが強烈、ボレーは苦手。" },
+  { id: "ken",   name: "ケン",   serve: "B", stroke: "B", volley: "B", footwork: "B", racket: 0,  color: "#2563eb", cap: "#1e3a8a", skin: "#ffd9b3", hair: "cap", desc: "バランス型。穴がなく扱いやすい。" },
+  { id: "saki",  name: "サキ",   serve: "C", stroke: "B", volley: "B", footwork: "B", racket: 10, color: "#db2777", cap: "#9d2449", skin: "#ffe3c7", hair: "ponytail", desc: "大きなラケットで当たりやすい、初心者向け。サーブは控えめ。" },
+  { id: "hayato",name: "ハヤト", serve: "C", stroke: "B", volley: "A", footwork: "A", racket: 0,  color: "#16a34a", cap: "#14532d", skin: "#eab883", hair: "band", band: "#facc15", desc: "俊足＋ボレーの達人。ネットプレーで攻める。" },
 ];
 let selectedChar = CHARACTERS[1];
+let selectedCharIdx = 1;
+// Game mode: "singles" (1v1) or "doubles" (you + AI partner vs a CPU pair).
+const MODES = [
+  { id: "singles", name: "シングルス", desc: "1対1の通常モード。" },
+  { id: "doubles", name: "ダブルス", desc: "AIパートナーと組んで2対2。コートが広く（アレー内も有効）、サーブは4人ローテーション。" },
+];
+let mode = "singles";
+// Visual theme: "retro" (classic) or "neon" (Luminous). Theme changes
+// only how things look — controls, rules and physics are identical.
+const THEMES = [
+  { id: "retro", name: "レトロ", desc: "ファミコン風のクラシックな見た目。" },
+  { id: "neon", name: "ルミナス", desc: "ネオンカラーでド派手に光る見た目。チェーン表示も大きく弾けます。操作・ルールは同じ。" },
+];
+let theme = "retro";
+function applyTheme() { document.body.classList.toggle("neon", theme === "neon"); }
 
 // ---------- Courts (all original settings, inspired by era conventions) ----------
 const COURTS = {
@@ -231,7 +334,9 @@ function refreshInfo() {
   document.getElementById("courtInfo").textContent = `${court.name} — ${court.desc}`;
   document.getElementById("playerName").textContent = c.name;
 }
-buildSelect("charSelect", CHARACTERS, c => c.name, c => { selectedChar = c; applyChar(); refreshInfo(); }, 1);
+buildSelect("charSelect", CHARACTERS, c => c.name, c => { selectedChar = c; selectedCharIdx = CHARACTERS.indexOf(c); applyChar(); refreshInfo(); }, 1);
+buildSelect("modeSelect", MODES, m => m.name, m => { mode = m.id; document.getElementById("modeInfo").textContent = m.desc; }, 0);
+buildSelect("themeSelect", THEMES, t => t.name, t => { theme = t.id; applyTheme(); document.getElementById("themeInfo").textContent = t.desc; }, 0);
 buildSelect("courtSelect", Object.values(COURTS), c => c.name, c => { court = c; refreshInfo(); }, 0);
 // ---------- Screens: menu (player/court select) -> game ----------
 let appScreen = "menu";
@@ -264,14 +369,17 @@ function singlesBounds(y) {
   const e = courtEdge(y); const inset = lerp(18, 28, e.t);
   return { left: e.left + inset, right: e.right - inset };
 }
+// Doubles plays to the outer (doubles) lines: the alleys are in.
+function doublesBounds(y) { const e = courtEdge(y); return { left: e.left, right: e.right }; }
+function activeBounds(y) { return mode === "doubles" ? doublesBounds(y) : singlesBounds(y); }
 // Keep every aimed shot inside the (narrower-at-the-far-end) court.
 function clampTargetX(x, y) {
-  const b = singlesBounds(y);
+  const b = activeBounds(y);
   return Math.max(b.left + 14, Math.min(b.right - 14, x));
 }
 function inCourt(x, y) {
   if (y < 66 || y > 494) return false;
-  const b = singlesBounds(y);
+  const b = activeBounds(y);
   return x >= b.left - 4 && x <= b.right + 4;
 }
 function inServiceBox(x, y, forPlayerServe) {
@@ -280,7 +388,7 @@ function inServiceBox(x, y, forPlayerServe) {
   // which on screen is top-LEFT for the bottom player and bottom-RIGHT for the top CPU.
   if (forPlayerServe) { if (y < 169 || y > NET_Y) return false; }
   else { if (y < NET_Y || y > 391) return false; }
-  const b = singlesBounds(y); const mid = (b.left + b.right) / 2;
+  const b = activeBounds(y); const mid = (b.left + b.right) / 2;
   const deuce = (rawPoints[0] + rawPoints[1]) % 2 === 0;
   if (forPlayerServe) return deuce ? (x >= b.left - 4 && x <= mid + 4) : (x >= mid - 4 && x <= b.right + 4);
   return deuce ? (x >= mid - 4 && x <= b.right + 4) : (x >= b.left - 4 && x <= mid + 4);
@@ -381,17 +489,70 @@ function aimRight() { return keys.ArrowRight || keys.KeyD || stick.x > 0.45; }
 })();
 
 // ---------- Entities ----------
-const player = { x: 240, y: 440, speed: 4.9, swing: 0, swingBuffer: 0, moving: false, anim: 0, color: "#2563eb", cap: "#1e3a8a" };
-const cpu    = { x: 240, y: 120, speed: 2.45, swing: 0, moving: false, anim: 0, color: "#f59e0b", cap: "#78350f" };
+const player = { x: 240, y: 440, speed: 4.9, swing: 0, swingBuffer: 0, moving: false, anim: 0, color: "#2563eb", cap: "#1e3a8a", skin: "#ffd9b3", hair: "cap", band: "#facc15" };
+const cpu    = { x: 240, y: 120, speed: 2.45, swing: 0, moving: false, anim: 0, color: "#f59e0b", cap: "#78350f", skin: "#ffd9b3", hair: "cap", band: "#facc15" };
+// Doubles-only entities: your AI partner and the second CPU.
+const partner = { x: 175, y: 348, speed: 3.4, swing: 0, moving: false, anim: 0, color: "#db2777", cap: "#9d2449", skin: "#ffe3c7", hair: "ponytail", band: "#facc15", homeX: 175, homeY: 348 };
+const cpu2    = { x: 305, y: 212, speed: 2.45, swing: 0, moving: false, anim: 0, color: "#2563eb", cap: "#1e3a8a", skin: "#ffd9b3", hair: "cap", band: "#facc15", homeX: 305, homeY: 212 };
+let partnerChar = CHARACTERS[2];
+// Doubles serve rotation: within each team the two members alternate games.
+let serveIdx = { player: 0, cpu: 0 };
+function teamOf(side) { return side === "player" ? [player, partner] : [cpu, cpu2]; }
+function serverEntity() {
+  if (mode !== "doubles") return server === "player" ? player : cpu;
+  return teamOf(server)[serveIdx[server]];
+}
+function receiverEntity() {
+  const o = server === "player" ? "cpu" : "player";
+  if (mode !== "doubles") return o === "player" ? player : cpu;
+  return teamOf(o)[serveIdx[o]];
+}
+function applyDoublesLooks() {
+  partnerChar = CHARACTERS[(selectedCharIdx + 1) % CHARACTERS.length];
+  const c2 = CHARACTERS[(selectedCharIdx + 2) % CHARACTERS.length];
+  partner.color = partnerChar.color; partner.cap = partnerChar.cap; partner.skin = partnerChar.skin; partner.hair = partnerChar.hair; partner.band = partnerChar.band;
+  partner.speed = 2.9 + STAT[partnerChar.footwork] * 0.3;
+  cpu2.color = c2.color; cpu2.cap = c2.cap; cpu2.skin = c2.skin; cpu2.hair = c2.hair; cpu2.band = c2.band;
+}
 const ball   = { x: 240, y: 430, vx: 0, vy: 0, z: 6, vz: 0, bounces: 0, lastHitter: null, serveFlight: false, dead: true, spin: "flat", type: "top", gravity: 0.4, trail: [], landX: null, landY: null };
 function ballColor() {
   return ball.type === "slice" ? "#f8fafc" : ball.type === "lob" ? "#fdba74" : ball.type === "drop" ? "#7dd3fc" : "#d9f99d";
 }
 let frameCount = 0;
 let particles = [], floaters = [];
+let bigFx = null; // Luminous theme: the big "N CHAIN!" centre-screen effect
+let rings = [], flashFx = null; // Luminous: impact shockwaves + edge flash
+let ghostTrails = []; // Luminous: the previous shot's ribbon, lingering and fading
+const IMPACT_COLORS = { top: "#a3e635", slice: "#e0f2fe", lob: "#fdba74", drop: "#38bdf8" };
+function spawnImpact(x, y, color, big) {
+  if (theme !== "neon") return;
+  rings.push({ x, y, t: 0, color, big: !!big });
+  rings.push({ x, y, t: -7, color, big: !!big }); // second, delayed shockwave
+  const n = big ? 26 : 14;
+  for (let i = 0; i < n; i++) particles.push({ x, y, vx: (Math.random() - .5) * 6.5, vy: (Math.random() - .5) * 6.5, life: 16 + Math.random() * 12, color, g: 0.05 });
+}
+function spawnFlash(color) { if (theme === "neon") flashFx = { color, t: 0 }; }
+// Rally heat (Luminous theme): the chain count drives how wild the visuals
+// get. Calm rallies stay stylish; hot rallies flood the screen with neon.
+function heatTier() {
+  const c = rallyChain.count;
+  return c >= 8 ? 3 : c >= 5 ? 2 : c >= 2 ? 1 : 0;
+}
+function heatColor(tier, pr) {
+  if (tier === 0) return "#22d3ee";
+  if (tier === 1) return lerpColor("#22d3ee", "#a78bfa", pr);
+  if (tier === 2) return lerpColor("#a78bfa", "#f472b6", pr);
+  return `hsl(${(frameCount * 3 + pr * 170) % 360} 100% 66%)`;
+}
+function lerpColor(a, b, t) {
+  const pa = [1, 3, 5].map(i => parseInt(a.substr(i, 2), 16));
+  const pb = [1, 3, 5].map(i => parseInt(b.substr(i, 2), 16));
+  return `rgb(${pa.map((v, i) => Math.round(v + (pb[i] - v) * t)).join(",")})`;
+}
 
 function applyChar() {
   player.color = selectedChar.color; player.cap = selectedChar.cap;
+  player.skin = selectedChar.skin; player.hair = selectedChar.hair; player.band = selectedChar.band;
   player.speed = 4.6 + STAT[selectedChar.footwork] * 0.5;
 }
 
@@ -416,6 +577,9 @@ function updateChainUI() {
   chainEl.textContent = rallyChain.count >= 2
     ? "🔥 " + (SHOT_LABELS[rallyChain.type] || "") + "チェーン x" + rallyChain.count + "（球速 +" + Math.round((chainMultiplier() - 1) * 100) + "%）"
     : "";
+  if (theme === "neon" && rallyChain.count >= 2) {
+    chainEl.classList.remove("pop"); void chainEl.offsetWidth; chainEl.classList.add("pop");
+  }
 }
 function resetChain() { rallyChain.type = null; rallyChain.count = 0; updateChainUI(); }
 function setMessage(t) { msgEl.textContent = t; }
@@ -427,6 +591,12 @@ function displayPoints(i) {
 function updateScoreboard() {
   document.getElementById("playerGames").textContent = games[0];
   document.getElementById("cpuGames").textContent = games[1];
+  if (theme === "neon") {
+    ["playerGames", "cpuGames"].forEach(id => {
+      const el = document.getElementById(id);
+      el.classList.remove("scorepop"); void el.offsetWidth; el.classList.add("scorepop");
+    });
+  }
   document.getElementById("playerPoints").textContent = displayPoints(0);
   document.getElementById("cpuPoints").textContent = displayPoints(1);
 }
@@ -434,6 +604,7 @@ function floater(text, x, y, color = "#ffd166") { floaters.push({ text, x, y, li
 
 // ---------- Flow ----------
 function resetPositions() {
+  if (mode === "doubles") { resetPositionsDoubles(); return; }
   const deuce = (rawPoints[0] + rawPoints[1]) % 2 === 0;
   if (server === "player") { player.x = deuce ? 268 : 212; cpu.x = deuce ? 196 : 284; }
   else { cpu.x = deuce ? 212 : 268; player.x = deuce ? 284 : 196; }
@@ -444,24 +615,51 @@ function resetPositions() {
   if (server === "player") { ball.x = player.x + 10; ball.y = player.y - 6; ball.z = 8; }
   else { ball.x = cpu.x - 10; ball.y = cpu.y + 6; ball.z = 8; }
 }
+function resetPositionsDoubles() {
+  const deuce = (rawPoints[0] + rawPoints[1]) % 2 === 0;
+  const S = serverEntity(), R = receiverEntity();
+  const sTeam = teamOf(server), rTeam = teamOf(server === "player" ? "cpu" : "player");
+  const sMate = sTeam[0] === S ? sTeam[1] : sTeam[0];
+  const rMate = rTeam[0] === R ? rTeam[1] : rTeam[0];
+  S.x = server === "player" ? (deuce ? 268 : 212) : (deuce ? 212 : 268);
+  S.y = server === "player" ? 445 : 115;
+  R.x = server === "player" ? (deuce ? 196 : 284) : (deuce ? 284 : 196);
+  R.y = server === "player" ? 115 : 445;
+  sMate.x = deuce ? 168 : 312;
+  sMate.y = server === "player" ? NET_Y + 55 : NET_Y - 55;
+  rMate.x = deuce ? 312 : 168;
+  rMate.y = server === "player" ? 185 : 375;
+  player.homeX = 305; player.homeY = 445; partner.homeX = 175; partner.homeY = 348;
+  cpu.homeX = 175; cpu.homeY = 118; cpu2.homeX = 305; cpu2.homeY = 212;
+  resetChain();
+  ball.vx = ball.vy = ball.vz = 0; ball.bounces = 0; ball.dead = true;
+  ball.lastHitter = null; ball.serveFlight = false; ball.trail = [];
+  if (server === "player") { ball.x = S.x + 10; ball.y = S.y - 6; ball.z = 8; }
+  else { ball.x = S.x - 10; ball.y = S.y + 6; ball.z = 8; }
+}
 function resetMatch() {
   rawPoints = [0, 0]; games = [0, 0]; server = "player"; faults = 0; pendingSecondServe = false; pendingLet = false;
+  serveIdx = { player: 0, cpu: 0 }; applyDoublesLooks();
   state = "serve"; resetPositions(); updateScoreboard();
   setMessage(`${selectedChar.name}で ${court.name} コート — SPACE/Aボタンでサーブ！`);
 }
 function startServe() {
   state = "serve"; faults = 0; pendingSecondServe = false; pendingLet = false; resetPositions();
-  setMessage(server === "player" ? "サーブ — Aボタン: 速いサーブ / Bボタン: 安全なスライスサーブ" : "CPU のサーブ…");
+  setMessage(server === "player"
+    ? (mode === "doubles" && serverEntity() !== player ? "パートナーのサーブ…" : "サーブ — Aボタン: 速いサーブ / Bボタン: 安全なスライスサーブ")
+    : "CPU のサーブ…");
   cpuServeTimer = 70; updateScoreboard();
 }
 function secondServe() {
   pendingSecondServe = false; state = "serve"; resetPositions();
   cpuServeTimer = 65;
-  setMessage(server === "player" ? "セカンドサーブ — 外すと失点、慎重に" : "CPU セカンドサーブ…");
+  setMessage(server === "player"
+    ? (mode === "doubles" && serverEntity() !== player ? "パートナーのセカンドサーブ…" : "セカンドサーブ — 外すと失点、慎重に")
+    : "CPU セカンドサーブ…");
 }
 function onSwing(shot) {
   queuedShot = shot;
-  if (state === "serve" && server === "player") { doServe("player", shot); return; }
+  if (state === "serve" && serverEntity() === player) { doServe("player", shot); return; }
   if (state !== "rally") return;
   player.swing = 10;
   player.swingBuffer = 14; // swing stays "live" for a few frames, so early presses still connect
@@ -469,13 +667,19 @@ function onSwing(shot) {
 }
 function doServe(who, shot = "top") {
   const isPlayer = who === "player";
-  const from = isPlayer ? player : cpu; from.swing = 10;
+  const from = serverEntity(); from.swing = 10;
   const second = faults >= 1;
   // 2nd serve (or B button) = slice serve: slower but safer arc.
   const safe = second || shot === "slice";
   let tx;
-  if (isPlayer) {
-    const b = singlesBounds(190), mid = (b.left + b.right) / 2;
+  if (isPlayer && from === partner) {
+    // AI partner serve: aim inside the correct box with some spread.
+    const b = activeBounds(190), mid = (b.left + b.right) / 2;
+    const rightBox = (rawPoints[0] + rawPoints[1]) % 2 === 0;
+    tx = mid + (rightBox ? -1 : 1) * (16 + Math.random() * 34);
+    tx = rightBox ? Math.max(b.left + 14, Math.min(mid - 8, tx)) : Math.max(mid + 8, Math.min(b.right - 14, tx));
+  } else if (isPlayer) {
+    const b = activeBounds(190), mid = (b.left + b.right) / 2;
     const rightBox = (rawPoints[0] + rawPoints[1]) % 2 === 0;
     tx = mid + (rightBox ? -52 : 52);
     if (aimLeft()) tx -= 34;
@@ -490,15 +694,22 @@ function doServe(who, shot = "top") {
   const ty = isPlayer ? 178 + Math.random() * 40 : 335 + Math.random() * 38;
   ball.x = from.x; ball.y = from.y; ball.z = 10; ball.dead = false;
   ball.lastHitter = who; ball.serveFlight = true;
-  const serveStat = isPlayer ? STAT[selectedChar.serve] : 2;
+  const serveStat = from === player ? STAT[selectedChar.serve] : from === partner ? STAT[partnerChar.serve] : 2;
   const power = safe ? 0 : serveStat;
   launchBall(tx, ty, safe ? "slice" : "flat", power, safe ? "slice" : "top");
+  spawnImpact(from.x, from.y - 12, "#fde047", false);
   state = "rally"; beep(isPlayer ? 260 : 220);
   const kmh = Math.round(94 + serveStat * 12 + (safe ? -22 : Math.random() * 8));
   if (!safe) floater(kmh + " km/h!", from.x, from.y - 34, "#fff");
   setMessage(second ? "" : "");
 }
+let ballSeq = 0;
 function launchBall(tx, ty, shot, power = 0, ballType) {
+  if (theme === "neon" && ball.trail.length > 8) {
+    ghostTrails.push({ pts: ball.trail.slice(), t: 0, color: ballColor() });
+    if (ghostTrails.length > 3) ghostTrails.shift();
+  }
+  ballSeq++;
   ball.type = ballType || (shot === "flat" ? "top" : shot);
   const dx = tx - ball.x, dy = ty - ball.y;
   const dist = Math.hypot(dx, dy) || 1;
@@ -547,8 +758,9 @@ function tryHit(p, who, shot) {
   if (ball.dead || ball.lastHitter === who) return;
   if (ball.serveFlight) return; // a serve must bounce before anyone may hit it
   const isPlayer = who === "player";
+  const isHuman = p === player;
   const d = Math.hypot(ball.x - p.x, ball.y - p.y);
-  const range = (isPlayer ? 60 : 46) + (isPlayer ? selectedChar.racket : 0);
+  const range = (isHuman ? 60 : 46) + (isHuman ? selectedChar.racket : 0);
   const toward = isPlayer ? ball.vy > -1.2 : ball.vy < 1.2;
   if (d > range || ball.z > 70 || !toward) return;
 
@@ -558,7 +770,8 @@ function tryHit(p, who, shot) {
   if (ball.bounces === 0 && ball.z > 36 && shot === "top") type = "smash";
   else if (ball.bounces === 0 && nearNet) type = (shot === "lob" || shot === "drop") ? shot : "volley";
 
-  const opp = isPlayer ? cpu : player;
+  const opps = isPlayer ? (mode === "doubles" ? [cpu, cpu2] : [cpu]) : (mode === "doubles" ? [player, partner] : [player]);
+  const oppX = opps.reduce((a, o) => a + o.x, 0) / opps.length;
   let targetY, power = 0;
   if (type === "smash") { targetY = isPlayer ? 88 + Math.random() * 40 : 462 + Math.random() * 22; }
   else if (type === "lob") { targetY = isPlayer ? 82 + Math.random() * 26 : 470 + Math.random() * 16; }
@@ -567,19 +780,38 @@ function tryHit(p, who, shot) {
   else { targetY = isPlayer ? 95 + Math.random() * 55 : 450 + Math.random() * 32; }
 
   let targetX;
-  const left = isPlayer && aimLeft();
-  const right = isPlayer && aimRight();
-  if (left) targetX = singlesBounds(targetY).left + 22;
-  else if (right) targetX = singlesBounds(targetY).right - 22;
-  else targetX = opp.x < 240 ? 325 + Math.random() * 55 : 100 + Math.random() * 55;
-  targetX = clampTargetX(targetX, targetY);
+  const left = isHuman && aimLeft();
+  const right = isHuman && aimRight();
+  if (left) targetX = activeBounds(targetY).left + 22;
+  else if (right) targetX = activeBounds(targetY).right - 22;
+  else if (isHuman) targetX = oppX < 240 ? 325 + Math.random() * 55 : 100 + Math.random() * 55;
+  else {
+    // AI aims at the open court: whichever side zone is farther from BOTH
+    // opponents, so a camper on one side gets punished on the other.
+    const dL = Math.min(...opps.map(o => Math.abs(o.x - 128)));
+    const dR = Math.min(...opps.map(o => Math.abs(o.x - 352)));
+    targetX = dL >= dR ? 100 + Math.random() * 55 : 325 + Math.random() * 55;
+  }
+  let mishit = false;
+  if (!isHuman) {
+    // AI execution errors: even a comfortable ball sometimes goes long or
+    // wide, and a stretched one (d > 18) errs more often. Without this,
+    // AI-vs-AI rallies literally never end.
+    const er = Math.random();
+    if (er < 0.04) { mishit = true; targetY += isPlayer ? -(50 + Math.random() * 40) : (50 + Math.random() * 40); }
+    else if (er < 0.07) { mishit = true; targetX += (targetX < 240 ? -1 : 1) * 46; }
+    else if (d > 18 && Math.random() < 0.16) { mishit = true; targetY += isPlayer ? -48 : 48; }
+  }
+  targetX = mishit ? targetX : clampTargetX(targetX, targetY);
 
-  if (isPlayer) {
-    power = type === "volley" ? STAT[selectedChar.volley] : STAT[selectedChar.stroke];
+  const hitterChar = p === player ? selectedChar : p === partner ? partnerChar : null;
+  if (hitterChar) {
+    power = type === "volley" ? STAT[hitterChar.volley] : STAT[hitterChar.stroke];
     if (type === "smash") floater("SMASH!", p.x, p.y - 36, "#ff5964");
     else if (type === "volley") floater("VOLLEY!", p.x, p.y - 36, "#8ecae6");
     else if (type === "top" && d < 26 && ball.z > 4 && ball.z < 30) { power += 1.5; floater("TOPSPIN!", p.x, p.y - 36); }
   }
+  const prevChainCount = rallyChain.count, prevChainType = rallyChain.type, prevTier = heatTier();
   // Chain bookkeeping. The chain tracks the BALL type (topspin/slice/lob chosen
   // with the buttons). Strokes are judged by that type: same type grows the
   // chain, a different type resets it. Volleys and smashes are "wildcards":
@@ -596,11 +828,33 @@ function tryHit(p, who, shot) {
     // Spin <-> slice switch: the chain breaks and a new one starts.
     rallyChain.type = type; rallyChain.count = 1;
   }
+  spawnImpact(ball.x, ball.y - ball.z, IMPACT_COLORS[shot] || "#ffffff", type === "smash");
+  // Luminous theme: celebrate chain growth with a big pop + sparks, and
+  // flash a break when a long chain gets cut.
+  if (theme === "neon") {
+    if (heatTier() > prevTier) spawnFlash(heatColor(heatTier(), 0.6));
+    if (rallyChain.count > prevChainCount && rallyChain.count >= 2) {
+      const col = rallyChain.type === "slice" ? "#7dd3fc" : "#a3e635";
+      bigFx = { text: rallyChain.count + " CHAIN!", color: col, t: 0, size: 46 };
+      for (let i = 0; i < 14; i++) particles.push({ x: ball.x, y: ball.y - ball.z, vx: (Math.random() - .5) * 4.6, vy: (Math.random() - .5) * 4.6, life: 20 + Math.random() * 10, color: col });
+    } else if (prevChainCount >= 3 && rallyChain.type !== prevChainType) {
+      bigFx = { text: "CHAIN BREAK", color: "#fb7185", t: 0, size: 30 };
+    }
+  }
   ball.lastHitter = who; ball.serveFlight = false;
   launchBall(targetX, targetY, type, power, shot);
   updateChainUI();
   if (rallyChain.count >= 3 && type !== "lob" && type !== "drop") floater("CHAIN x" + rallyChain.count + "!", p.x, p.y - 52, "#fb923c");
   beep(type === "smash" ? 460 : type === "slice" ? 200 : 300);
+}
+function spawnScoreFx(winner, isMatchEnd) {
+  if (theme !== "neon") return;
+  spawnFlash(winner === "player" ? "#a3e635" : "#fb7185");
+  const wEnt = winner === "player" ? player : cpu;
+  spawnImpact(wEnt.x, wEnt.y - 14, winner === "player" ? "#a3e635" : "#fb7185", true);
+  bigFx = isMatchEnd
+    ? { text: "GAME SET!", sub: winner === "player" ? "あなたの勝ち！" : "CPUの勝ち…", color: winner === "player" ? "#fde047" : "#fb7185", t: 0, size: 46, y: 168 }
+    : { text: winner === "player" ? "POINT!" : "LOST", sub: games[0] + " - " + games[1] + "（" + displayPoints(0) + " - " + displayPoints(1) + "）", color: winner === "player" ? "#a3e635" : "#fb7185", t: 0, size: 44, y: 168 };
 }
 function awardPoint(winner, reason) {
   if (state !== "rally" && state !== "serve") return;
@@ -612,13 +866,15 @@ function awardPoint(winner, reason) {
   if ((p >= 4 || c >= 4) && Math.abs(p - c) >= 2) {
     const gw = p > c ? 0 : 1;
     games[gw]++; rawPoints = [0, 0];
+    if (mode === "doubles") serveIdx[server] ^= 1; // next time this team serves, the partner serves
     server = server === "player" ? "cpu" : "player";
     if (games[gw] >= WIN_GAMES) {
       setMessage((gw === 0 ? "🏆 ゲームセット！あなたの勝ち！" : "ゲームセット。CPUの勝ち…") + " Rで再戦");
-      state = "matchEnd"; updateScoreboard(); return;
+      state = "matchEnd"; spawnScoreFx(gw === 0 ? "player" : "cpu", true); updateScoreboard(); return;
     }
     setMessage((gw === 0 ? "ゲーム！あなたが取りました" : "ゲーム。CPUが取りました") + " — サーブ交代");
   }
+  spawnScoreFx(winner, false);
   updateScoreboard();
 }
 function handleBounce() {
@@ -641,9 +897,9 @@ function handleBounce() {
 // DT normalises game speed to 60fps units, so 120Hz phone screens
 // no longer run the whole game at double speed in real time.
 let DT = 1, lastFrameTime = 0;
-function cpuChooseShot() {
+function cpuChooseShot(p = cpu) {
   if (ball.z > 38 && Math.random() < 0.6) return "top"; // becomes a smash (wildcard, keeps the chain)
-  if (cpu.y > 195 && Math.random() < 0.25) return "drop"; // close to the net: drop it short (wildcard)
+  if (p.y > 195 && p.y < NET_Y && Math.random() < 0.25) return "drop"; // close to the net: drop it short (wildcard)
   const r = Math.random();
   if (rallyChain.type) {
     if (r < 0.72) return rallyChain.type;                            // keep the same-type rally going
@@ -651,6 +907,71 @@ function cpuChooseShot() {
     return rallyChain.type === "top" ? "slice" : "top";              // occasionally break it on purpose
   }
   return r < 0.6 ? "top" : r < 0.9 ? "slice" : "lob";
+}
+// Doubles AI: the two members of a team split the work. Whoever is closer
+// to the predicted landing chases the ball; the other covers the formation
+// (net if the chaser is pulled deep, back if the chaser is at the net).
+function updateAI(p) {
+  const side = p === partner ? "player" : "cpu";
+  const mate = p === partner ? player : p === cpu ? cpu2 : cpu;
+  const yMin = side === "player" ? NET_Y + 22 : 58;
+  const yMax = side === "player" ? 512 : NET_Y - 22;
+  let tx = p.homeX, ty = p.homeY, chase = false;
+  const incoming = ball.lastHitter !== null && ball.lastHitter !== side;
+  const toOurSide = side === "player" ? ball.vy > 0.5 : ball.vy < -0.5;
+  // Let it go: a ball predicted to land well out is not chased. (Without
+  // this, AI dutifully runs out of court and saves every error ball.)
+  let chaseable = true;
+  if (ball.landX !== null) {
+    const b = activeBounds(ball.landY);
+    chaseable = ball.landX > b.left - 16 && ball.landX < b.right + 16 && ball.landY > 58 && ball.landY < 502;
+  }
+  if (incoming && toOurSide && chaseable) {
+    if (p.jitterFor !== ballSeq) {
+      p.jitterFor = ballSeq;
+      p.jitterX = (Math.random() - 0.5) * 34;
+      p.jitterY = (Math.random() - 0.5) * 22;
+    }
+    const gx = ball.bounces > 0 ? ball.x : (ball.landX !== null ? ball.landX + p.jitterX : ball.x);
+    const gy = ball.bounces > 0 ? ball.y : (ball.landY !== null ? ball.landY + p.jitterY : ball.y);
+    const myD = Math.hypot(gx - p.x, gy - p.y);
+    const mateD = Math.hypot(gx - mate.x, gy - mate.y);
+    const bias = p === partner ? -6 : 6; // your partner defers to you a little
+    // Reaction: until the ball crosses the net, only drift toward the
+    // landing side. A full sprint starts once it is actually coming over,
+    // so deep or short balls can genuinely beat the chaser.
+    const crossed = side === "player" ? ball.y > NET_Y - 30 : ball.y < NET_Y + 30;
+    if (myD <= mateD + bias) {
+      if (crossed) { tx = gx; ty = gy; chase = true; }
+      else { tx = p.homeX + (gx - p.homeX) * 0.3; ty = p.homeY; }
+    }
+    else {
+      const mateDeep = side === "player" ? gy > 360 : gy < 200;
+      tx = 240 + (gx - 240) * 0.35;
+      ty = mateDeep ? (side === "player" ? NET_Y + 58 : NET_Y - 58) : (side === "player" ? 432 : 128);
+    }
+  }
+  const dx = tx - p.x, dy = ty - p.y;
+  const dd = Math.hypot(dx, dy) || 1;
+  p.moving = dd > 6;
+  if (p.moving) {
+    p.anim += DT;
+    const sp = p.speed * (chase ? 1 : 0.75);
+    p.x += dx / dd * sp * DT; p.y += dy / dd * sp * DT;
+  }
+  p.x = Math.max(18, Math.min(W - 18, p.x));
+  p.y = Math.max(yMin, Math.min(yMax, p.y));
+  if (chase) {
+    const bd = Math.hypot(ball.x - p.x, ball.y - p.y);
+    if (bd < 42 && ball.z < 52 && ball.lastHitter !== side && frameCount >= (p.holdUntil || 0)) {
+      // Late and stretched after the bounce: sometimes the ball just gets past.
+      if (ball.bounces >= 1 && bd > 22 && Math.random() < 0.4) p.holdUntil = frameCount + 14;
+      else {
+        p.swing = 10;
+        if (!(bd > 30 && Math.random() < 0.35)) tryHit(p, side, cpuChooseShot(p));
+      }
+    }
+  }
 }
 function update() {
   let mx = 0, my = 0;
@@ -665,18 +986,26 @@ function update() {
   if (player.swing > 0) player.swing -= DT;
   if (player.swingBuffer > 0) player.swingBuffer -= DT;
   if (cpu.swing > 0) cpu.swing -= DT;
-  particles = particles.filter(pt => (pt.life -= DT) > 0 && (pt.x += pt.vx * DT, pt.y += pt.vy * DT, true));
+  if (partner.swing > 0) partner.swing -= DT;
+  if (cpu2.swing > 0) cpu2.swing -= DT;
+  particles = particles.filter(pt => (pt.life -= DT) > 0 && (pt.x += pt.vx * DT, pt.vy += (pt.g || 0) * DT, pt.y += pt.vy * DT, true));
   floaters = floaters.filter(f => (f.life -= DT) > 0 && (f.y -= 0.5 * DT, true));
 
   if (state === "serve") {
-    if (server === "player") { ball.x = player.x + 10; ball.y = player.y - 6; }
-    else { cpuServeTimer -= DT; ball.x = cpu.x - 10; ball.y = cpu.y + 6; if (cpuServeTimer <= 0) doServe("cpu", Math.random() < 0.3 ? "slice" : "top"); }
+    const se = serverEntity();
+    if (se === player) { ball.x = player.x + 10; ball.y = player.y - 6; }
+    else {
+      cpuServeTimer -= DT;
+      ball.x = se.x + (server === "player" ? 10 : -10); ball.y = se.y + (server === "player" ? -6 : 6);
+      if (cpuServeTimer <= 0) doServe(server, Math.random() < 0.3 ? "slice" : "top");
+    }
   }
 
   if (state === "rally" && !ball.dead) {
     // Buffered swing: connect automatically the moment the ball comes into range.
     if (player.swingBuffer > 0 && ball.lastHitter !== "player") tryHit(player, "player", queuedShot);
-    if (ball.vy < 0 || ball.y < NET_Y) {
+    if (mode === "doubles") { updateAI(cpu); updateAI(cpu2); updateAI(partner); }
+    else if (ball.vy < 0 || ball.y < NET_Y) {
       const dx = ball.x - cpu.x, dy = Math.max(78, ball.y - 8) - cpu.y;
       const dd = Math.hypot(dx, dy) || 1;
       cpu.moving = dd > 6; if (cpu.moving) cpu.anim += DT;
@@ -689,7 +1018,14 @@ function update() {
     } else { cpu.moving = false; cpu.x += (240 - cpu.x) * 0.03 * DT; cpu.y += (118 - cpu.y) * 0.03 * DT; }
 
     ball.trail.push({ x: ball.x, y: ball.y - ball.z });
-    if (ball.trail.length > 7) ball.trail.shift();
+    if (ball.trail.length > 90) ball.trail.shift();
+    if (theme === "neon" && heatTier() === 3 && frameCount % 5 === 0) {
+      particles.push({ x: ball.x, y: ball.y - ball.z, vx: (Math.random() - .5) * 1.6, vy: (Math.random() - .5) * 1.6, life: 16, color: `hsl(${Math.random() * 360} 100% 70%)` });
+    }
+    if (theme === "neon" && heatTier() >= 1 && frameCount % 3 === 0 && ball.trail.length > 5) {
+      const tail = ball.trail[0];
+      particles.push({ x: tail.x, y: tail.y, vx: (Math.random() - .5) * 0.7, vy: 0.4 + Math.random() * 0.5, life: 15, color: heatColor(heatTier(), 0) });
+    }
     ball.x += ball.vx * DT; ball.y += ball.vy * DT;
     ball.z += ball.vz * DT; ball.vz -= ball.gravity * DT;
 
@@ -732,7 +1068,9 @@ function update() {
     if (pointTimer <= 0) {
       if (pendingLet) {
         pendingLet = false; state = "serve"; resetPositions(); cpuServeTimer = 70;
-        setMessage(server === "player" ? "レット — もう一度サーブ" : "レット — CPUのサーブやり直し");
+        setMessage(server === "player"
+          ? (mode === "doubles" && serverEntity() !== player ? "レット — パートナーがもう一度サーブ" : "レット — もう一度サーブ")
+          : "レット — CPUのサーブやり直し");
       } else if (pendingSecondServe) secondServe(); else startServe();
     }
   }
@@ -740,21 +1078,91 @@ function update() {
 
 // ---------- Draw ----------
 const stars = Array.from({ length: 70 }, (_, i) => ({ x: (i * 67) % W, y: (i * 41) % H, s: i % 3 + 1 }));
+// Neon city skyline (Luminous theme backdrop): dark towers, lit windows.
+const WIN_COLORS = ["#22d3ee", "#f472b6", "#a78bfa"];
+const skyline = Array.from({ length: 16 }, (_, i) => {
+  const hgt = 20 + ((i * 37) % 42);
+  const wins = Array.from({ length: 6 }, (_, k) => ({
+    dx: 3 + ((i * 7 + k * 11) % 20), dy: 4 + ((k * 9 + i * 3) % Math.max(6, hgt - 9)),
+    c: (i + k) % 3,
+  }));
+  return { x: (i * 61 + 13) % (W - 34), w: 24 + (i * 13) % 16, h: hgt, wins };
+});
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`;
+}
 function drawCourt() {
-  ctx.fillStyle = court.outside; ctx.fillRect(0, 0, W, H);
-  if (court === COURTS.cosmo) { ctx.fillStyle = "#fff"; stars.forEach(s => ctx.fillRect(s.x, s.y, s.s, s.s)); }
+  const neon = theme === "neon";
+  const cOut = neon ? "#05010f" : court.outside;
+  const cIn = neon ? "#1d1550" : court.inside;
+  const cIn2 = neon ? "#291b6e" : court.inside2;
+  ctx.fillStyle = cOut; ctx.fillRect(0, 0, W, H);
+  if (court === COURTS.cosmo || neon) { ctx.fillStyle = "#fff"; stars.forEach(s => ctx.fillRect(s.x, s.y, s.s, s.s)); }
+  if (neon) {
+    const hg = ctx.createLinearGradient(0, 0, 0, 130);
+    hg.addColorStop(0, "rgba(124,58,237,.30)"); hg.addColorStop(1, "rgba(124,58,237,0)");
+    ctx.fillStyle = hg; ctx.fillRect(0, 0, W, 130);
+    skyline.forEach(b => {
+      ctx.fillStyle = "#0d0724";
+      ctx.fillRect(b.x, 76 - b.h, b.w, b.h);
+      b.wins.forEach(w => { ctx.fillStyle = WIN_COLORS[w.c]; ctx.globalAlpha = 0.5 + heatTier() * 0.14; ctx.fillRect(b.x + w.dx, 76 - b.h + w.dy, 2.4, 3.2); });
+      ctx.globalAlpha = 1;
+    });
+    [["#22d3ee", 6], ["#f472b6", W - 13]].forEach(([colr, px]) => {
+      ctx.save(); ctx.shadowColor = colr; ctx.shadowBlur = 12 + heatTier() * 5; ctx.fillStyle = colr; ctx.globalAlpha = 0.35 + heatTier() * 0.13;
+      ctx.fillRect(px, 150, 7, 190); ctx.restore(); ctx.globalAlpha = 1;
+    });
+  }
   const tl = courtEdge(70), bl = courtEdge(490);
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(tl.left - 26, 70); ctx.lineTo(tl.right + 26, 70);
   ctx.lineTo(bl.right + 26, 490); ctx.lineTo(bl.left - 26, 490); ctx.closePath();
-  ctx.fillStyle = court.inside; ctx.fill(); ctx.clip();
-  if (court === COURTS.lawn) { // mowing stripes
-    ctx.fillStyle = court.inside2;
+  ctx.fillStyle = cIn; ctx.fill(); ctx.clip();
+  if (neon) {
+    const g = ctx.createLinearGradient(0, 70, 0, 490);
+    g.addColorStop(0, "#171242"); g.addColorStop(0.5, "#251a63"); g.addColorStop(1, "#2e1b70");
+    ctx.fillStyle = g; ctx.fillRect(0, 70, W, 420);
+    ctx.fillStyle = "rgba(244,114,182,.07)"; ctx.fillRect(0, 70, W, NET_Y - 70);
+    ctx.fillStyle = "rgba(34,211,238,.07)"; ctx.fillRect(0, NET_Y, W, 490 - NET_Y);
+  }
+  if (court === COURTS.lawn || neon) { // mowing stripes / neon bands
+    ctx.fillStyle = cIn2;
     for (let y = 70; y < 490; y += 84) ctx.fillRect(0, y, W, 42);
   }
+  if (neon) {
+    // Perspective grid: barely there when calm, glowing when the rally heats up.
+    const tier = heatTier();
+    const gCol = tier === 3 ? `hsl(${frameCount * 2 % 360} 100% 70%)` : ["#22d3ee", "#22d3ee", "#a78bfa", "#f472b6"][tier];
+    const pulse = tier >= 2 ? 0.02 + 0.02 * Math.sin(frameCount * 0.12) : 0;
+    ctx.strokeStyle = gCol; ctx.globalAlpha = 0.05 + tier * 0.05 + pulse; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let y = 112; y < 490; y += 42) {
+      const e = courtEdge(y);
+      ctx.moveTo(e.left - 26, y); ctx.lineTo(e.right + 26, y);
+    }
+    [0.25, 0.5, 0.75].forEach(f => {
+      const t1 = courtEdge(70), t2 = courtEdge(490);
+      ctx.moveTo(t1.left + (t1.right - t1.left) * f, 70);
+      ctx.lineTo(t2.left + (t2.right - t2.left) * f, 490);
+    });
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
   ctx.restore();
-  ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3;
+  let neonLine = "#67e8f9";
+  if (neon) {
+    const tier = heatTier();
+    neonLine = tier === 3 ? `hsl(${frameCount * 2 % 360} 100% 74%)` : ["#67e8f9", "#67e8f9", "#c4b5fd", "#f9a8d4"][tier];
+    ctx.save(); ctx.shadowColor = neonLine; ctx.shadowBlur = 10 + tier * 6;
+  }
+  if (neon) {
+    const lg = ctx.createLinearGradient(0, 0, W, 0);
+    lg.addColorStop(0, "#22d3ee"); lg.addColorStop(0.5, neonLine); lg.addColorStop(1, "#f472b6");
+    ctx.strokeStyle = lg;
+  } else ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(tl.left, 70); ctx.lineTo(tl.right, 70); ctx.lineTo(bl.right, 490); ctx.lineTo(bl.left, 490); ctx.closePath(); ctx.stroke();
   const st = singlesBounds(70), sb = singlesBounds(490);
@@ -766,53 +1174,224 @@ function drawCourt() {
   ctx.moveTo(s1.left + 18, 175); ctx.lineTo(s1.right - 18, 175);
   ctx.moveTo(s2.left + 24, 385); ctx.lineTo(s2.right - 24, 385);
   ctx.moveTo(240, 175); ctx.lineTo(240, 385); ctx.stroke();
+  if (neon) ctx.restore();
   ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect(28, NET_Y - 4, W - 56, 10);
-  ctx.fillStyle = "#fff"; ctx.fillRect(28, NET_Y - 6, W - 56, 4);
+  if (neon) { ctx.save(); ctx.shadowColor = "#f0abfc"; ctx.shadowBlur = 12; }
+  ctx.fillStyle = neon ? "#f0abfc" : "#fff"; ctx.fillRect(28, NET_Y - 6, W - 56, 4);
+  if (neon) {
+    ctx.restore();
+    const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.34, W / 2, H / 2, H * 0.8);
+    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(2,0,12,.52)");
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  }
 }
 // Chibi 3-head-tall pixel player, drawn from rectangles only.
 function drawCharacter(p, isPlayer) {
-  const s = (isPlayer ? 1.18 : 0.82); // size in px units
+  const s = isPlayer ? 1.18 : 0.82;
   const u = s * 2; // pixel unit
   const x = p.x, y = p.y;
+  const skin = p.skin || "#ffd9b3";
+  if (theme === "neon") { // soft aura behind the sprite
+    const auraCol = isPlayer ? "#22d3ee" : "#f472b6";
+    const ag = ctx.createRadialGradient(x, y - 6 * u, 0, x, y - 6 * u, 30 * s);
+    ag.addColorStop(0, hexA(auraCol, 0.20)); ag.addColorStop(1, hexA(auraCol, 0));
+    ctx.fillStyle = ag;
+    ctx.beginPath(); ctx.arc(x, y - 6 * u, 30 * s, 0, Math.PI * 2); ctx.fill();
+  }
+  if (theme === "neon") { // glowing ring: cyan for your side, pink for CPU side
+    ctx.save();
+    ctx.strokeStyle = isPlayer ? "#22d3ee" : "#f472b6";
+    ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = 9; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.ellipse(x, y + 5.4 * u, 7.6 * u, 2.6 * u, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+  // Shadow
   ctx.fillStyle = "rgba(0,0,0,.25)";
-  ctx.beginPath(); ctx.ellipse(x, y + 9 * u, 7 * u, 2.4 * u, 0, 0, Math.PI * 2); ctx.fill();
-  const run = p.moving ? Math.floor(p.anim / 5) % 2 : 0;
-  ctx.fillStyle = "#f8fafc"; // shorts / socks block
-  ctx.fillRect(x - 3 * u, y + 2 * u, 6 * u, 3 * u);
-  ctx.fillStyle = "#8d5524"; // legs, alternate while running
-  ctx.fillRect(x - 3 * u + (run ? u : 0), y + 5 * u, 2 * u, 4 * u);
-  ctx.fillRect(x + u - (run ? u : 0), y + 5 * u, 2 * u, 4 * u);
-  ctx.fillStyle = p.color; // shirt
-  ctx.fillRect(x - 4 * u, y - 4 * u, 8 * u, 6 * u);
-  ctx.fillStyle = "#ffd9b3"; // big head (3-head-tall proportion)
-  ctx.fillRect(x - 3.5 * u, y - 11 * u, 7 * u, 7 * u);
-  ctx.fillStyle = p.cap; // cap
-  ctx.fillRect(x - 3.5 * u, y - 11 * u, 7 * u, 2.2 * u);
-  ctx.fillRect(x + (isPlayer ? 1 : -8) * 0 + (isPlayer ? 2.5 * u : -5.5 * u), y - 9.4 * u, 3 * u, 1.2 * u);
-  // racket, swung up while swinging
-  const swingLift = p.swing > 0 ? -5 * u : 0;
-  const rx = x + 6 * u, ry = y - 3 * u + swingLift;
-  ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = Math.max(2, u * 0.7);
-  ctx.beginPath(); ctx.moveTo(x + 3.5 * u, y - u); ctx.lineTo(rx, ry); ctx.stroke();
-  ctx.beginPath(); ctx.ellipse(rx, ry - 2.5 * u, 2.6 * u, 3.6 * u, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(x, y + 5.4 * u, 7 * u, 2.2 * u, 0, 0, Math.PI * 2); ctx.fill();
+  // Legs with a two-frame run cycle (drawn under the body sprite)
+  const run = p.moving ? Math.floor(p.anim / 5) % 2 : -1;
+  const legLen = side => (run === -1 ? 3 : (side === 0) === (run === 0) ? 3.2 : 1.8);
+  [[-4, 0], [2, 1]].forEach(([off, side]) => {
+    const len = legLen(side) * u;
+    ctx.fillStyle = skin;
+    ctx.fillRect(x + off * u, y, 2 * u, len);
+    ctx.fillStyle = "#f8fafc"; // socks
+    ctx.fillRect(x + off * u, y + len, 2 * u, 0.8 * u);
+    ctx.fillStyle = "#1f2937"; // shoes
+    ctx.fillRect(x + (off - 0.3) * u, y + len + 0.8 * u, 2.6 * u, 1.2 * u);
+  });
+  // Body sprite: 14 x 12 pixels. Front view (CPU) has a face; the player
+  // is seen from behind, so the head is all hair/cap.
+  const HEAD_FRONT = ["....CCCCCC....", "..CCCCCCCCCC..", "..CCCCCCCCCC..", "..SSSSSSSSSS..", "..SSESSSSESS..", "...SSSSSSSS..."];
+  const HEAD_BACK  = ["....CCCCCC....", "..CCCCCCCCCC..", "..CCCCCCCCCC..", "..CCCCCCCCCC..", "..CCCCCCCCCC..", "...SSSSSSSS..."];
+  const BODY = [".ATTTTTTTTTTA.", ".ATTTTTTTTTTA.", "..TTTTTTTTTT..", "..TTTTTTTTTT..", "..WWWWWWWWWW..", "..WWWWWWWWWW.."];
+  const rows = (isPlayer ? HEAD_BACK : HEAD_FRONT).concat(BODY);
+  const pal = { C: p.cap, S: skin, T: p.color, A: skin, W: "#f8fafc", E: "#1f2937" };
+  const top = y - 12 * u;
+  rows.forEach((row, ri) => {
+    for (let ci = 0; ci < row.length; ci++) {
+      const ch = row[ci];
+      if (ch === ".") continue;
+      let col = pal[ch];
+      if (ch === "C" && p.hair === "band" && ri === 2) col = p.band || "#facc15"; // headband row
+      ctx.fillStyle = col;
+      ctx.fillRect(x - 7 * u + ci * u, top + ri * u, u + 0.5, u + 0.5);
+    }
+  });
+  // Ponytail (Saki): hangs down the back, or at the side from the front
+  if (p.hair === "ponytail") {
+    ctx.fillStyle = p.cap;
+    if (isPlayer) ctx.fillRect(x - u, top + 3 * u, 2 * u, 5 * u);
+    else ctx.fillRect(x - 8 * u, top + 3 * u, 2 * u, 5 * u);
+  }
+  // Racket arm: sweeps through the swing instead of just lifting.
+  const sideSign = isPlayer ? 1 : -1;
+  let th = -0.8; // idle: racket up and out
+  if (p.swing > 0) { const q = 1 - p.swing / 8; th = -2.3 + 2.8 * q; }
+  if (!isPlayer) th = Math.PI - th; // CPU faces the other way (mirrored)
+  const sx = x + sideSign * 5.2 * u, sy = y - 4.5 * u;
+  const hx = sx + Math.cos(th) * 3.2 * u, hy = sy + Math.sin(th) * 3.2 * u;
+  ctx.strokeStyle = skin; ctx.lineWidth = 1.9 * u; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(hx, hy); ctx.stroke();
+  const rx = hx + Math.cos(th) * 5.2 * u, ry = hy + Math.sin(th) * 5.2 * u;
+  if (theme === "neon") {
+    // Lightsaber (Luminous only): your side burns blue, the CPU side red.
+    // The blade always glows; swinging leaves a swoosh of afterimages.
+    const saber = isPlayer ? "#38bdf8" : "#ef4444";
+    const saberPale = isPlayer ? "#bae6fd" : "#fecaca";
+    const dx = Math.cos(th), dy = Math.sin(th);
+    const bx = hx + dx * 1.2 * u, by = hy + dy * 1.2 * u;   // blade base
+    const txp = hx + dx * 10.6 * u, typ = hy + dy * 10.6 * u; // blade tip
+    if (!p.saberTrail) p.saberTrail = [];
+    p.saberTrail = p.saberTrail.filter(sp => (sp.t += DT) < 9);
+    if (p.swing > 0) p.saberTrail.push({ bx, by, tx: txp, ty: typ, t: 0 });
+    ctx.save(); ctx.lineCap = "round";
+    p.saberTrail.forEach(sp => { // swing afterimages, oldest = faintest
+      const k = 1 - sp.t / 9;
+      ctx.globalAlpha = k * 0.45;
+      ctx.strokeStyle = saber; ctx.shadowColor = saber; ctx.shadowBlur = 10;
+      ctx.lineWidth = (1.5 + 5 * k) * u;
+      ctx.beginPath(); ctx.moveTo(sp.bx, sp.by); ctx.lineTo(sp.tx, sp.ty); ctx.stroke();
+      ctx.globalAlpha = k * 0.5; ctx.strokeStyle = "#ffffff"; ctx.shadowBlur = 0;
+      ctx.lineWidth = 1.4 * u;
+      ctx.beginPath(); ctx.moveTo(sp.bx, sp.by); ctx.lineTo(sp.tx, sp.ty); ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+    // Hilt: dark grip with a silver band
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#1f2937"; ctx.lineWidth = 2.3 * u;
+    ctx.beginPath(); ctx.moveTo(hx - dx * 0.6 * u, hy - dy * 0.6 * u); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = "#d1d5db"; ctx.lineWidth = 2.4 * u;
+    ctx.beginPath(); ctx.moveTo(hx + dx * 0.45 * u, hy + dy * 0.45 * u); ctx.lineTo(hx + dx * 0.85 * u, hy + dy * 0.85 * u); ctx.stroke();
+    // Blade: coloured glow, pale mid, white core — with a faint hum flicker
+    const flick = 0.9 + 0.1 * Math.sin(frameCount * 0.9 + p.x);
+    ctx.strokeStyle = saber; ctx.shadowColor = saber;
+    ctx.shadowBlur = (p.swing > 0 ? 20 : 14) * flick;
+    ctx.globalAlpha = 0.9; ctx.lineWidth = 5.2 * u;
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(txp, typ); ctx.stroke();
+    ctx.strokeStyle = saberPale; ctx.shadowBlur = 8;
+    ctx.globalAlpha = 0.95; ctx.lineWidth = 2.9 * u;
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(txp, typ); ctx.stroke();
+    ctx.strokeStyle = "#ffffff"; ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    ctx.lineWidth = 1.6 * u;
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(txp, typ); ctx.stroke();
+    ctx.restore();
+    return;
+  }
+  ctx.strokeStyle = "#92400e"; ctx.lineWidth = 1.2 * u;
+  ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(rx - Math.cos(th) * 3.4 * u, ry - Math.sin(th) * 3.4 * u); ctx.stroke();
+  ctx.save(); ctx.translate(rx, ry); ctx.rotate(th);
+  ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = Math.max(1.6, 0.85 * u);
+  ctx.beginPath(); ctx.ellipse(0, 0, 4.6 * u, 3.3 * u, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 1; // strings
+  ctx.beginPath();
+  [-1.4, 0, 1.4].forEach(o => { ctx.moveTo(o * u, -2.3 * u); ctx.lineTo(o * u, 2.3 * u); });
+  [-1.15, 1.15].forEach(o => { ctx.moveTo(-3.2 * u, o * u); ctx.lineTo(3.2 * u, o * u); });
+  ctx.stroke();
+  ctx.restore();
 }
 function drawBall() {
   const scale = 0.65 + (ball.y / H) * 0.6;
-  ball.trail.forEach((t, i) => {
-    ctx.fillStyle = `rgba(255,255,255,${0.05 + i * 0.02})`;
-    ctx.beginPath(); ctx.arc(t.x, t.y, 4 * scale, 0, Math.PI * 2); ctx.fill();
-  });
+  const neonBall = theme === "neon";
+  if (!neonBall) {
+    ball.trail.slice(-7).forEach((t, i) => {
+      ctx.fillStyle = `rgba(255,255,255,${0.05 + i * 0.02})`;
+      ctx.beginPath(); ctx.arc(t.x, t.y, 4 * scale, 0, Math.PI * 2); ctx.fill();
+    });
+  } else {
+    // Ribbon trail: thin cyan when calm, purple/pink as the chain builds,
+    // rainbow at the highest heat. Length, width and glow all grow.
+    const tier = heatTier();
+    const n = Math.min(ball.trail.length, 16 + rallyChain.count * 4, 64);
+    const raw = ball.trail.slice(-n);
+    const pts = [];
+    raw.forEach((p, i) => {
+      if (i) { const q = raw[i - 1]; pts.push({ x: (q.x + p.x) / 2, y: (q.y + p.y) / 2 }); }
+      pts.push(p);
+    });
+    const maxW = [2.6, 4.2, 6, 7.5][tier];
+    ctx.save();
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.shadowBlur = [8, 14, 20, 26][tier];
+    for (let i = 1; i < pts.length; i++) {
+      const pr = i / (pts.length - 1 || 1);
+      const col = heatColor(tier, pr);
+      ctx.strokeStyle = col; ctx.shadowColor = col;
+      ctx.globalAlpha = 0.2 + pr * 0.85;
+      ctx.lineWidth = 0.6 + pr * maxW;
+      ctx.beginPath(); ctx.moveTo(pts[i - 1].x, pts[i - 1].y); ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke();
+    }
+    if (tier >= 2) { // bright core line inside the ribbon
+      ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.5; ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+  if (neonBall && !ball.dead) {
+    const tier = heatTier();
+    const bx = ball.x, by = ball.y - ball.z;
+    const gr = 22 + tier * 8;
+    const hg = ctx.createRadialGradient(bx, by, 0, bx, by, gr);
+    hg.addColorStop(0, hexA(ballColor(), 0.5)); hg.addColorStop(1, hexA(ballColor(), 0));
+    ctx.fillStyle = hg;
+    ctx.beginPath(); ctx.arc(bx, by, gr, 0, Math.PI * 2); ctx.fill();
+    if (tier >= 2) { // ghost afterimages trailing the ball
+      [6, 12, 18, 24].forEach((off, gi) => {
+        if (tier === 2 && gi > 2) return;
+        const gp = ball.trail[ball.trail.length - 1 - off];
+        if (!gp) return;
+        ctx.save();
+        ctx.globalAlpha = [0.24, 0.16, 0.1, 0.06][gi];
+        ctx.fillStyle = ballColor(); ctx.shadowColor = ballColor(); ctx.shadowBlur = 8;
+        ctx.beginPath(); ctx.arc(gp.x, gp.y, (6 * scale) * (gi ? 0.8 : 0.92), 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      });
+    }
+  }
   ctx.fillStyle = "rgba(0,0,0,.3)";
   ctx.beginPath(); ctx.ellipse(ball.x, ball.y + 4, 7 * scale, 3 * scale, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = ballColor();
   ctx.beginPath(); ctx.arc(ball.x, ball.y - ball.z, 6 * scale + ball.z * 0.04, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke();
+  if (neonBall) { // glowing core
+    ctx.save();
+    ctx.shadowColor = ballColor(); ctx.shadowBlur = 14 + heatTier() * 6;
+    ctx.fillStyle = ballColor();
+    ctx.beginPath(); ctx.arc(ball.x, ball.y - ball.z, 6 * scale + ball.z * 0.04, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0; ctx.fillStyle = "rgba(255,255,255,.9)";
+    ctx.beginPath(); ctx.arc(ball.x, ball.y - ball.z, (6 * scale + ball.z * 0.04) * 0.45, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
 }
 function drawLandingMarker() {
   if (state !== "rally" || ball.dead || ball.bounces > 0) return;
   if (ball.landX === null || ball.landY < NET_Y) return; // only for balls coming at the player
   const pulse = 8 + Math.sin(frameCount / 6) * 2.5;
-  ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.lineWidth = 2;
+  ctx.strokeStyle = theme === "neon" ? "rgba(103,232,249,.95)" : "rgba(255,255,255,.9)"; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.ellipse(ball.landX, ball.landY, pulse + 5, (pulse + 5) * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(ball.landX - 5, ball.landY - 3); ctx.lineTo(ball.landX + 5, ball.landY + 3);
@@ -820,17 +1399,99 @@ function drawLandingMarker() {
 }
 function frame(timestamp) {
   frameCount++;
+  if (theme === "neon" && frameCount % 9 === 0 && particles.length < 130) {
+    particles.push({ x: Math.random() * W, y: H - Math.random() * 120, vx: (Math.random() - .5) * 0.3, vy: -0.25 - Math.random() * 0.3, life: 90, color: Math.random() < 0.5 ? "#67e8f9" : "#f0abfc" });
+  }
   if (timestamp && lastFrameTime) DT = Math.min(2.5, Math.max(0.2, (timestamp - lastFrameTime) / 16.667));
   if (timestamp) lastFrameTime = timestamp;
   if (appScreen !== "game") { requestAnimationFrame(frame); return; } // menu open: game is paused
   if (!paused) update();
-  drawCourt(); drawLandingMarker();
-  particles.forEach(pt => { ctx.fillStyle = pt.color; ctx.fillRect(pt.x, pt.y, 3, 3); });
-  drawCharacter(cpu, false);
-  drawCharacter(player, true);
+  drawCourt();
+  if (theme === "neon") {
+    ghostTrails = ghostTrails.filter(gt => (gt.t += DT) < 30);
+    ghostTrails.forEach(gt => {
+      ctx.save();
+      ctx.globalAlpha = (1 - gt.t / 30) * 0.35;
+      ctx.strokeStyle = gt.color; ctx.shadowColor = gt.color; ctx.shadowBlur = 8;
+      ctx.lineWidth = 3; ctx.lineCap = "round";
+      ctx.beginPath();
+      gt.pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+  drawLandingMarker();
+  particles.forEach(pt => {
+    if (theme === "neon") {
+      ctx.save(); ctx.fillStyle = pt.color; ctx.shadowColor = pt.color; ctx.shadowBlur = 6;
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, 2.2, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    } else { ctx.fillStyle = pt.color; ctx.fillRect(pt.x, pt.y, 3, 3); }
+  });
+  if (theme === "neon") {
+    rings = rings.filter(r => (r.t += DT) < 20);
+    rings.forEach(r => {
+      if (r.t < 0) return;
+      const p = r.t / 20, rad = 4 + p * (r.big ? 68 : 44);
+      ctx.save();
+      if (p < 0.45) { // impact flash disc
+        ctx.globalAlpha = (1 - p / 0.45) * 0.4;
+        ctx.fillStyle = r.color; ctx.shadowColor = r.color; ctx.shadowBlur = 18;
+        ctx.beginPath(); ctx.ellipse(r.x, r.y, rad * 0.55, rad * 0.24, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = (1 - p) * 0.9;
+      ctx.strokeStyle = r.color; ctx.shadowColor = r.color; ctx.shadowBlur = 14;
+      ctx.lineWidth = 3 * (1 - p) + 0.6;
+      ctx.beginPath(); ctx.ellipse(r.x, r.y, rad, rad * 0.42, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    });
+  }
+  const drawList = mode === "doubles" ? [cpu, cpu2, partner, player] : [cpu, player];
+  drawList.slice().sort((a, b) => a.y - b.y).forEach(e => drawCharacter(e, e === player || e === partner));
   if (state !== "matchEnd") drawBall();
   ctx.font = "bold 15px monospace"; ctx.textAlign = "center";
-  floaters.forEach(f => { ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y); });
+  floaters.forEach(f => {
+    if (theme === "neon") { ctx.save(); ctx.shadowColor = f.color; ctx.shadowBlur = 10; }
+    ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y);
+    if (theme === "neon") ctx.restore();
+  });
+  if (bigFx) {
+    bigFx.t += DT;
+    const p = bigFx.t / 50;
+    if (p >= 1) bigFx = null;
+    else {
+      const pop = p < 0.22 ? 0.4 + 0.69 * (p / 0.22) : 1.09 - 0.09 * Math.min(1, (p - 0.22) / 0.2);
+      const alpha = p > 0.65 ? 1 - (p - 0.65) / 0.35 : 1;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, alpha);
+      ctx.textAlign = "center";
+      ctx.font = "bold " + Math.round(bigFx.size * pop) + "px monospace";
+      const y0 = bigFx.y || 205;
+      ctx.shadowColor = bigFx.color; ctx.shadowBlur = 26;
+      ctx.fillStyle = bigFx.color;
+      ctx.fillText(bigFx.text, W / 2, y0);
+      ctx.shadowBlur = 0; ctx.fillStyle = "rgba(255,255,255,.92)";
+      ctx.fillText(bigFx.text, W / 2, y0);
+      if (bigFx.sub) {
+        ctx.font = "bold " + Math.round(bigFx.size * 0.48 * pop) + "px monospace";
+        ctx.shadowColor = bigFx.color; ctx.shadowBlur = 16;
+        ctx.fillStyle = bigFx.color;
+        ctx.fillText(bigFx.sub, W / 2, y0 + Math.round(bigFx.size * 0.95));
+      }
+      ctx.restore();
+    }
+  }
+  if (flashFx) {
+    flashFx.t += DT;
+    const p = flashFx.t / 22;
+    if (p >= 1) flashFx = null;
+    else {
+      ctx.save();
+      ctx.globalAlpha = (1 - p) * 0.75;
+      ctx.strokeStyle = flashFx.color; ctx.shadowColor = flashFx.color; ctx.shadowBlur = 22;
+      ctx.lineWidth = 5; ctx.strokeRect(3, 3, W - 6, H - 6);
+      ctx.restore();
+    }
+  }
   if (paused) {
     ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = "#ffffff"; ctx.font = "bold 30px monospace"; ctx.textAlign = "center";
@@ -839,6 +1500,8 @@ function frame(timestamp) {
   requestAnimationFrame(frame);
 }
 
+document.getElementById("modeInfo").textContent = MODES[0].desc;
+document.getElementById("themeInfo").textContent = THEMES[0].desc;
 applyChar(); refreshInfo(); resetMatch(); frame();
 window.__gameStarted = true;
 
